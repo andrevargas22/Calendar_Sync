@@ -28,7 +28,7 @@ jobs:
 
       - name: Create credentials file
         run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
 
       - name: Run sync script
         run: python sync.py
