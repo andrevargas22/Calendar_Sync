@@ -56,10 +56,14 @@ def get_google_events(svc, start, end):
     ).execute().get('items',[])
     out = []
     for ev in evs:
-        s = ev['start'].get('dateTime', ev['start']['date'])
-        f = ev['end'].get('dateTime',   ev['end']['date'])
+        # Handle both date and dateTime formats safely
+        s = ev['start'].get('dateTime') or ev['start'].get('date')
+        f = ev['end'].get('dateTime') or ev['end'].get('date')
+        
+        # Parse dates consistently
         s = datetime.fromisoformat(s.replace('Z',''))
         f = datetime.fromisoformat(f.replace('Z',''))
+        
         out.append({'titulo':ev.get('summary'), 'inicio':s, 'fim':f})
     return out
 
