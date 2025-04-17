@@ -13,9 +13,21 @@ CREDENTIALS_JSON = os.environ['GOOGLE_CREDENTIALS']
 
 # ————————— AUTENTICAÇÃO —————————
 def get_calendar_service():
-    info = json.loads(CREDENTIALS_JSON)
-    creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
-    return build('calendar', 'v3', credentials=creds)
+    """Initialize the Calendar API using Service Account"""
+    try:
+        credentials_json = os.environ.get('GOOGLE_CREDENTIALS')
+        if not credentials_json:
+            raise ValueError("GOOGLE_CREDENTIALS environment variable not found")
+            
+        credentials_info = json.loads(credentials_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            credentials_info,
+            scopes=SCOPES
+        )
+        return build('calendar', 'v3', credentials=credentials)
+    except Exception as e:
+        print(f"❌ Erro ao autenticar com Service Account: {e}")
+        raise
 
 # ————— GET TEAMS EVENTS —————————
 def get_teams_events():
