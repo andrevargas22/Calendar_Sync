@@ -127,17 +127,17 @@ def main():
         print(f"Agenda '{CALENDAR_NAME}' não encontrada.")
         return
 
-    eventos_teams, inicio, fim = get_teams_events()
-    eventos_google = get_google_events(service, inicio, fim, calendar_id)
+    #eventos_teams, inicio, fim = get_teams_events()
+    #eventos_google = get_google_events(service, inicio, fim, calendar_id)
 
-    for evento in eventos_teams:
-        if evento['titulo'].startswith('Cancelado:'):
-            print(f"Pulando evento cancelado: {evento['titulo']}")
-            continue
-        if not evento_existe(evento, eventos_google):
-            criar_evento(service, evento, calendar_id)
-        else:
-            print(f"Evento já existe: {evento['titulo']}")
+    #for evento in eventos_teams:
+    #    if evento['titulo'].startswith('Cancelado:'):
+    #        print(f"Pulando evento cancelado: {evento['titulo']}")
+    #        continue
+    #    if not evento_existe(evento, eventos_google):
+    #        criar_evento(service, evento, calendar_id)
+    #    else:
+    #        print(f"Evento já existe: {evento['titulo']}")
 
 if __name__ == '__main__':
     main()
