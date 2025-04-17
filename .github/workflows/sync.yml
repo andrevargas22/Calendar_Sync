@@ -4,28 +4,31 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 7 * * 1-5'  # Rodar todo dia útil às 7h da manhã
+  push:
+    branches:
+      - main
 
 jobs:
   sync-calendar:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Create credentials file
-      run: |
-        echo "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
+      - name: Create credentials file
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
 
-    - name: Run sync script
-      run: python sync.py
+      - name: Run sync script
+        run: python sync.py
