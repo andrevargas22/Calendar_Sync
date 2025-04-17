@@ -1,143 +1,78 @@
-import json
+import os, json, requests
+from datetime import datetime, timedelta
 from icalendar import Calendar as ICALCalendar
 import recurring_ical_events
-from datetime import datetime, timedelta
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import requests
-import os
 
-# === CONFIGURAÇÕES ===
-SCOPES = [
-    'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/calendar.readonly'
-]
+# ——————————— CONFIG ———————————
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+TEAMS_ICS_URL    = os.environ['TEAMS_ICS_URL']
+CALENDAR_ID      = os.environ['GOOGLE_CALENDAR_ID']
+CREDENTIALS_JSON = os.environ['GOOGLE_CREDENTIALS'] 
 
-TEAMS_ICS_URL = 'https://outlook.office365.com/owa/calendar/471f9c9338764ae3bf8839a02fdfcad1@casasbahia.com.br/af786ccf75ac4f05a3909066eb68ad4d1541582488987527822/calendar.ics'
-CALENDAR_NAME = 'Trabalho'
-CREDENTIALS_PATH = 'credentials.json'
-
-# === FUNÇÕES ===
-
+# ————————— AUTENTICAÇÃO —————————
 def get_calendar_service():
-    """Initialize the Calendar API using Service Account"""
-    try:
-        credentials = service_account.Credentials.from_service_account_file(
-            'credentials.json', 
-            scopes=SCOPES
-        )
-        return build('calendar', 'v3', credentials=credentials)
-    except Exception as e:
-        print(f"❌ Erro ao autenticar com Service Account: {e}")
-        raise
+    info = json.loads(CREDENTIALS_JSON)
+    creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
+    return build('calendar', 'v3', credentials=creds)
 
-def get_calendar_id(service, calendar_name):
-    try:
-        calendar_list = service.calendarList().list().execute()
-        print(f"📅 Buscando agenda '{calendar_name}' entre {len(calendar_list['items'])} agendas...")
-        for calendar in calendar_list['items']:
-            print(f"- Encontrada agenda: {calendar['summary']}")
-            if calendar['summary'] == calendar_name:
-                return calendar['id']
-    except Exception as e:
-        print(f"❌ Erro ao listar agendas: {e}")
-    return None
-
+# ————— GET TEAMS EVENTS —————————
 def get_teams_events():
-    resp = requests.get(TEAMS_ICS_URL)
-    resp.raise_for_status()
+    resp = requests.get(TEAMS_ICS_URL); resp.raise_for_status()
     ical = ICALCalendar.from_ical(resp.text)
+    hoje   = datetime.now()
+    seg    = hoje - timedelta(days=hoje.weekday())
+    start  = seg.replace(hour=7,  minute=0)
+    end    = (seg + timedelta(days=4)).replace(hour=18, minute=0)
+    evs = recurring_ical_events.of(ical).between(start, end)
+    out = []
+    for e in evs:
+        s = e.get('DTSTART').dt; f = e.get('DTEND').dt
+        if not isinstance(s, datetime): s = datetime.combine(s, datetime.min.time())
+        if not isinstance(f, datetime): f = datetime.combine(f, datetime.min.time())
+        out.append({'titulo':str(e.get('SUMMARY')), 'inicio':s, 'fim':f})
+    return out, start, end
 
-    hoje = datetime.now()
-    segunda = hoje - timedelta(days=hoje.weekday())
-    inicio_periodo = segunda.replace(hour=7, minute=0, second=0, microsecond=0)
-    fim_periodo = (segunda + timedelta(days=4)).replace(hour=18, minute=0, second=0, microsecond=0)
+# ————— LIST GOOGLE EVENTS —————————
+def get_google_events(svc, start, end):
+    evs = svc.events().list(
+        calendarId=CALENDAR_ID,
+        timeMin = start.isoformat()+'Z',
+        timeMax = end.isoformat()+'Z',
+        singleEvents=True, orderBy='startTime'
+    ).execute().get('items',[])
+    out = []
+    for ev in evs:
+        s = ev['start'].get('dateTime', ev['start']['date'])
+        f = ev['end'].get('dateTime',   ev['end']['date'])
+        s = datetime.fromisoformat(s.replace('Z',''))
+        f = datetime.fromisoformat(f.replace('Z',''))
+        out.append({'titulo':ev.get('summary'), 'inicio':s, 'fim':f})
+    return out
 
-    events = recurring_ical_events.of(ical).between(inicio_periodo, fim_periodo)
-
-    eventos_teams = []
-    for e in events:
-        dtstart = e.get('DTSTART').dt
-        dtend = e.get('DTEND').dt
-        if not isinstance(dtstart, datetime):
-            dtstart = datetime.combine(dtstart, datetime.min.time())
-        if not isinstance(dtend, datetime):
-            dtend = datetime.combine(dtend, datetime.min.time())
-
-        eventos_teams.append({
-            'titulo': str(e.get('SUMMARY')),
-            'inicio': dtstart.replace(tzinfo=None),
-            'fim': dtend.replace(tzinfo=None),
-        })
-
-    return eventos_teams, inicio_periodo, fim_periodo
-
-def get_google_events(service, inicio_periodo, fim_periodo, calendar_id):
-    eventos_google = []
-
-    events_result = service.events().list(
-        calendarId=calendar_id,
-        timeMin=inicio_periodo.isoformat() + 'Z',
-        timeMax=fim_periodo.isoformat() + 'Z',
-        singleEvents=True,
-        orderBy='startTime'
-    ).execute()
-
-    for event in events_result.get('items', []):
-        start = event['start'].get('dateTime', event['start'].get('date'))
-        end = event['end'].get('dateTime', event['end'].get('date'))
-
-        inicio = datetime.fromisoformat(start.replace('Z', '')).replace(tzinfo=None)
-        fim = datetime.fromisoformat(end.replace('Z', '')).replace(tzinfo=None)
-
-        eventos_google.append({
-            'titulo': event['summary'],
-            'inicio': inicio,
-            'fim': fim
-        })
-
-    return eventos_google
-
-def criar_evento(service, evento, calendar_id):
-    event = {
-        'summary': evento['titulo'],
-        'start': {'dateTime': evento['inicio'].isoformat(), 'timeZone': 'America/Sao_Paulo'},
-        'end': {'dateTime': evento['fim'].isoformat(), 'timeZone': 'America/Sao_Paulo'},
+# ————— CRIAÇÃO —————————
+def criar_evento(svc, ev):
+    body = {
+      'summary': ev['titulo'],
+      'start': {'dateTime': ev['inicio'].isoformat(), 'timeZone':'America/Sao_Paulo'},
+      'end':   {'dateTime': ev['fim'].isoformat(),    'timeZone':'America/Sao_Paulo'},
     }
+    svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
+    print("Criado:", ev['titulo'])
 
-    try:
-        service.events().insert(calendarId=calendar_id, body=event).execute()
-        print(f'Evento criado: {evento["titulo"]}')
-    except Exception as e:
-        print(f'Erro ao criar evento: {e}')
-
-def evento_existe(evento_teams, eventos_google):
-    for evento_google in eventos_google:
-        if (evento_teams['titulo'] == evento_google['titulo'] and
-            abs((evento_teams['inicio'] - evento_google['inicio']).total_seconds()) < 60):
-            return True
-    return False
-
+# ————— MAIN —————————
 def main():
-    print("🔐 Iniciando sincronização com autenticação via Service Account...")
+    svc = get_calendar_service()
+    teams, start, end = get_teams_events()
+    google = get_google_events(svc, start, end)
 
-    service = get_calendar_service()
-    calendar_id = get_calendar_id(service, CALENDAR_NAME)
-    if not calendar_id:
-        print(f"Agenda '{CALENDAR_NAME}' não encontrada.")
-        return
+    for ev in teams:
+        if not any(abs((ev['inicio']-g['inicio']).total_seconds())<60 and ev['titulo']==g['titulo']
+                   for g in google):
+            criar_evento(svc, ev)
+        else:
+            print("Já existe:", ev['titulo'])
 
-    #eventos_teams, inicio, fim = get_teams_events()
-    #eventos_google = get_google_events(service, inicio, fim, calendar_id)
-
-    #for evento in eventos_teams:
-    #    if evento['titulo'].startswith('Cancelado:'):
-    #        print(f"Pulando evento cancelado: {evento['titulo']}")
-    #        continue
-    #    if not evento_existe(evento, eventos_google):
-    #        criar_evento(service, evento, calendar_id)
-    #    else:
-    #        print(f"Evento já existe: {evento['titulo']}")
-
-if __name__ == '__main__':
+if __name__=='__main__':
     main()
