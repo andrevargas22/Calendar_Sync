@@ -77,6 +77,42 @@ def criar_evento(svc, ev):
     svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
     print("Criado:", ev['titulo'])
 
+def get_original_title(canceled_title):
+    """Extrai o título original de um evento cancelado"""
+    if canceled_title.startswith('Cancelado:'):
+        return canceled_title.replace('Cancelado:', '').strip()
+    return None
+
+def deletar_evento(svc, titulo, inicio):
+    """Procura e deleta um evento específico"""
+    try:
+        # Busca eventos num intervalo de 1 hora
+        start = inicio - timedelta(hours=1)
+        end = inicio + timedelta(hours=1)
+        
+        events = svc.events().list(
+            calendarId=CALENDAR_ID,
+            timeMin=start.isoformat() + 'Z',
+            timeMax=end.isoformat() + 'Z',
+            singleEvents=True
+        ).execute().get('items', [])
+        
+        for event in events:
+            event_start = datetime.fromisoformat(
+                event['start'].get('dateTime', event['start'].get('date')).replace('Z','')
+            )
+            if (event['summary'] == titulo and 
+                abs((inicio - event_start).total_seconds()) < 3600):
+                svc.events().delete(
+                    calendarId=CALENDAR_ID,
+                    eventId=event['id']
+                ).execute()
+                print(f"Removido evento cancelado: {titulo}")
+                return True
+    except Exception as e:
+        print(f"Erro ao deletar evento: {e}")
+    return False
+
 # ————— MAIN —————————
 def main():
     svc = get_calendar_service()
@@ -84,8 +120,20 @@ def main():
     google = get_google_events(svc, start, end)
 
     for ev in teams:
-        if not any(abs((ev['inicio']-g['inicio']).total_seconds())<60 and ev['titulo']==g['titulo']
-                   for g in google):
+        # Ignora eventos DTV
+        if ev['titulo'].startswith('DTV'):
+            print("Ignorando evento DTV:", ev['titulo'])
+            continue
+            
+        # Trata eventos cancelados
+        original_title = get_original_title(ev['titulo'])
+        if original_title:
+            deletar_evento(svc, original_title, ev['inicio'])
+            continue
+            
+        # Cria eventos normais
+        if not any(abs((ev['inicio']-g['inicio']).total_seconds())<60 
+                  and ev['titulo']==g['titulo'] for g in google):
             criar_evento(svc, ev)
         else:
             print("Já existe:", ev['titulo'])
