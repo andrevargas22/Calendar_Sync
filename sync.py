@@ -20,16 +20,27 @@ CREDENTIALS_PATH = 'credentials.json'
 # === FUNÇÕES ===
 
 def get_calendar_service():
-    credentials = service_account.Credentials.from_service_account_file(
-        CREDENTIALS_PATH, scopes=SCOPES
-    )
-    return build('calendar', 'v3', credentials=credentials)
+    """Initialize the Calendar API using Service Account"""
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            'credentials.json', 
+            scopes=SCOPES
+        )
+        return build('calendar', 'v3', credentials=credentials)
+    except Exception as e:
+        print(f"❌ Erro ao autenticar com Service Account: {e}")
+        raise
 
 def get_calendar_id(service, calendar_name):
-    calendar_list = service.calendarList().list().execute()
-    for calendar in calendar_list['items']:
-        if calendar['summary'] == calendar_name:
-            return calendar['id']
+    try:
+        calendar_list = service.calendarList().list().execute()
+        print(f"📅 Buscando agenda '{calendar_name}' entre {len(calendar_list['items'])} agendas...")
+        for calendar in calendar_list['items']:
+            print(f"- Encontrada agenda: {calendar['summary']}")
+            if calendar['summary'] == calendar_name:
+                return calendar['id']
+    except Exception as e:
+        print(f"❌ Erro ao listar agendas: {e}")
     return None
 
 def get_teams_events():
