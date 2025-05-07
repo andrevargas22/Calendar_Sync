@@ -11,7 +11,7 @@ env:
   GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
 
 jobs:
-  sync-calendar:
+  delete-events:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -27,5 +27,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run read script
+      - name: Run delete script
         run: python delete.py

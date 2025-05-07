@@ -4,11 +4,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 7 * * 1-5'  # Rodar todo dia útil às 7h da manhã
-  push:
-    branches:
-      - feature/optmization
 
 env:
+  LOG_LEVEL: INFO 
   TEAMS_ICS_URL: ${{ secrets.TEAMS_ICS_URL }}
   GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
   GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
@@ -31,4 +29,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run sync script
-        run: python sync.py
+        run: python calendar_sync.py
