@@ -1,17 +1,17 @@
-name: Sync Teams Calendar to Google
+name: delete events
 
 on:
+  
   workflow_dispatch:
   schedule:
     - cron: '0 7 * * 1-5'  # Rodar todo dia útil às 7h da manhã
 
 env:
-  TEAMS_ICS_URL: ${{ secrets.TEAMS_ICS_URL }}
   GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
   GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
 
 jobs:
-  sync-calendar:
+  delete-events:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -27,5 +27,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run sync script
-        run: python calendar_sync.py
+      - name: Run delete script
+        run: python delete.py
