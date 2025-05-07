@@ -32,7 +32,8 @@ def download_cache_from_gcs():
     blob = bucket.blob(GCS_BLOB)
     
     if not blob.exists():
-        logger.info(f"No cache file found at {GCS_BUCKET}/{GCS_BLOB}")
+        # Only log at debug level to reduce verbosity
+        logger.debug(f"No cache file found at {GCS_BUCKET}/{GCS_BLOB}")
         return set()
         
     content = blob.download_as_text()
@@ -42,7 +43,8 @@ def download_cache_from_gcs():
     for row in reader:
         cache.add((row['titulo'], row['inicio'], row['fim']))
     
-    logger.info(f"Downloaded cache with {len(cache)} events from GCS")
+    # This is sufficient - we don't need to log "downloaded from GCS"
+    logger.debug(f"Cache loaded: {len(cache)} events")
     return cache
 
 def upload_cache_to_gcs(cache_set):
@@ -65,7 +67,7 @@ def upload_cache_to_gcs(cache_set):
         writer.writerow({'titulo': titulo, 'inicio': inicio, 'fim': fim})
     
     blob.upload_from_string(output.getvalue(), content_type='text/csv')
-    logger.info(f"Uploaded cache with {len(cache_set)} events to GCS")
+    logger.debug(f"Cache saved: {len(cache_set)} events")
 
 def load_event_cache():
     """
@@ -101,9 +103,37 @@ def append_events_to_cache(new_events, cached_set):
             added.append(event)
     
     if added:
-        logger.info(f"Adding {len(added)} new events to cache")
         upload_cache_to_gcs(cached_set)
-    else:
-        logger.info("No new events to add to cache")
-        
+    
     return added
+
+def clean_old_events_from_cache(cached_set, current_window_start):
+    """
+    Remove events from cache that are from before the current window.
+    
+    Args:
+        cached_set: Set of cached events as (title, start, end) tuples
+        current_window_start: Datetime object representing the start of current window
+        
+    Returns:
+        Set of cached events with old events removed
+    """
+    from src.utils import parse_datetime
+    
+    current_count = len(cached_set)
+    filtered_set = set()
+    
+    for titulo, inicio, fim in cached_set:
+        event_start = parse_datetime(inicio)
+        
+        # Keep events that start on or after the window start
+        if event_start >= current_window_start:
+            filtered_set.add((titulo, inicio, fim))
+    
+    removed_count = current_count - len(filtered_set)
+    
+    if removed_count > 0:
+        logger.info(f"Removed {removed_count} old events from cache")
+        upload_cache_to_gcs(filtered_set)
+    
+    return filtered_set
