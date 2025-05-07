@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 7 * * 1-5'  # Rodar todo dia útil às 7h da manhã
-  push:
-    branches:
-      - feature/optmization
+  #push:
+  #  branches:
+  #    - feature/optmization
 
 env:
   GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
