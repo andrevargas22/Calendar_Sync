@@ -31,4 +31,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run sync script
-        run: python sync_new.py
+        run: python readfile.py
