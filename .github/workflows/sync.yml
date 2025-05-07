@@ -6,7 +6,7 @@ on:
     - cron: '0 7 * * 1-5'  # Rodar todo dia útil às 7h da manhã
   push:
     branches:
-      - main
+      - feature/optmization
 
 env:
   TEAMS_ICS_URL: ${{ secrets.TEAMS_ICS_URL }}
@@ -31,4 +31,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run sync script
-        run: python sync.py
+        run: python sync_new.py
