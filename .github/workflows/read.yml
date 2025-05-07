@@ -1,4 +1,4 @@
-name: Sync Teams Calendar to Google
+name: Read csv
 
 on:
   workflow_dispatch:
