@@ -5,16 +5,55 @@ import recurring_ical_events
 from pathlib import Path
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from google.cloud import storage
+import pandas as pd
+import io
 
 # ——————————— CONFIG ———————————
 TEAMS_ICS_URL = os.environ['TEAMS_ICS_URL']
 CACHE_FILE = 'events_cache.csv'
+GCS_BUCKET = "calendar_sync"
+GCS_BLOB = "events_cache.csv"
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID')
 CREDENTIALS_JSON = os.environ.get('GOOGLE_CREDENTIALS')
 
+def get_gcp_credentials():
+    """Get GCP credentials from environment variable."""
+    credentials_json = os.environ.get('GOOGLE_CREDENTIALS')
+    if not credentials_json:
+        raise ValueError("GOOGLE_CREDENTIALS environment variable not found")
+    credentials_info = json.loads(credentials_json)
+    return service_account.Credentials.from_service_account_info(credentials_info)
 
-# ————————— FUNCTIONS —————————
+def download_cache_from_gcs():
+    """Download CSV cache from GCS and return as set of tuples."""
+    credentials = get_gcp_credentials()
+    client = storage.Client(credentials=credentials)
+    bucket = client.bucket(GCS_BUCKET)
+    blob = bucket.blob(GCS_BLOB)
+    if not blob.exists():
+        return set()
+    content = blob.download_as_text()
+    reader = csv.DictReader(io.StringIO(content))
+    cache = set()
+    for row in reader:
+        cache.add((row['titulo'], row['inicio'], row['fim']))
+    return cache
+
+def upload_cache_to_gcs(cache_set):
+    """Upload the cache set as CSV to GCS."""
+    credentials = get_gcp_credentials()
+    client = storage.Client(credentials=credentials)
+    bucket = client.bucket(GCS_BUCKET)
+    blob = bucket.blob(GCS_BLOB)
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=['titulo', 'inicio', 'fim'])
+    writer.writeheader()
+    for titulo, inicio, fim in cache_set:
+        writer.writerow({'titulo': titulo, 'inicio': inicio, 'fim': fim})
+    blob.upload_from_string(output.getvalue(), content_type='text/csv')
+
 def get_teams_events():
     """Fetch events from Teams calendar for current and next week"""
     resp = requests.get(TEAMS_ICS_URL)
@@ -46,41 +85,23 @@ def get_teams_events():
     return out, start, end
 
 def load_event_cache():
-    """Load cached events from CSV file."""
-    cache = set()
-    if Path(CACHE_FILE).exists():
-        with open(CACHE_FILE, newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                cache.add((
-                    row['titulo'],
-                    row['inicio'],
-                    row['fim']
-                ))
-    return cache
+    """Load cached events from GCS CSV file."""
+    return download_cache_from_gcs()
 
 def append_events_to_cache(new_events, cached_set):
     """Append new events to cache file if not already present. Returns list of new events added."""
-    file_exists = Path(CACHE_FILE).exists()
     added = []
-    with open(CACHE_FILE, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['titulo', 'inicio', 'fim'])
-        if not file_exists:
-            writer.writeheader()
-        for event in new_events:
-            key = (
-                event['titulo'],
-                event['inicio'].isoformat(),
-                event['fim'].isoformat()
-            )
-            if key not in cached_set:
-                writer.writerow({
-                    'titulo': event['titulo'],
-                    'inicio': event['inicio'].isoformat(),
-                    'fim': event['fim'].isoformat()
-                })
-                cached_set.add(key)
-                added.append(event)
+    for event in new_events:
+        key = (
+            event['titulo'],
+            event['inicio'].isoformat(),
+            event['fim'].isoformat()
+        )
+        if key not in cached_set:
+            cached_set.add(key)
+            added.append(event)
+    if added:
+        upload_cache_to_gcs(cached_set)
     return added
 
 def get_calendar_service():
@@ -244,7 +265,7 @@ def main():
     print(f"Found {len(current_events)} events")
     current_events_sorted = sorted(current_events, key=lambda e: e['inicio'])
 
-    print("\n2. Caching events to CSV...")
+    print("\n2. Caching events to GCS CSV...")
     cached_set = load_event_cache()
     before_count = len(cached_set)
     new_events = append_events_to_cache(current_events_sorted, cached_set)
@@ -305,10 +326,11 @@ def main():
     else:
         print("All cached events are present in Google Calendar.")
 
-    # --- NOVA VERIFICAÇÃO: Remover pares cancelados e originais ---
     print("\n5. Checking for 'Cancelado:' events and removing pairs if found...")
     svc = get_calendar_service()
     buscar_e_deletar_cancelados(svc)
+    # Atualiza o cache após possíveis deleções
+    # (buscar_e_deletar_cancelados já faz isso, se necessário)
 
 if __name__ == '__main__':
     main()
