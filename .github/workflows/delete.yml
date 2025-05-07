@@ -1,13 +1,14 @@
-name: Read csv
+name: delete events
 
 on:
   
-  push:
-   branches:
-      - feature/optmization
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1-5'  # Rodar todo dia útil às 7h da manhã
 
 env:
   GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+  GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
 
 jobs:
   sync-calendar:
@@ -27,4 +28,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run read script
-        run: python readfile.py
+        run: python delete.py
