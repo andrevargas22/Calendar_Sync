@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 7 * * 1-5'  # Rodar todo dia útil às 7h da manhã
+    - cron: '0 12 * * 1-5' # Rodar todo dia útil ao meio-dia
 
 env:
   TEAMS_ICS_URL: ${{ secrets.TEAMS_ICS_URL }}

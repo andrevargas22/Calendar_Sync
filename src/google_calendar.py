@@ -63,7 +63,12 @@ def get_google_events(svc, start, end):
             s = s.astimezone().replace(tzinfo=None)
         if f.tzinfo is not None:
             f = f.astimezone().replace(tzinfo=None)
-        out.append({'titulo':ev.get('summary'), 'inicio':s, 'fim':f})
+        out.append({
+            'id': ev.get('id'),
+            'titulo': ev.get('summary'),
+            'inicio': s,
+            'fim': f
+        })
     
     return out
 

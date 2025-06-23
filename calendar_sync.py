@@ -1,8 +1,9 @@
 """
-Calendar Sync - Synchronizes Microsoft Teams calendar with Google Calendar (two-way sync).
+Calendar Sync - Synchronizes Microsoft Teams calendar with Google Calendar (optimized two-way sync, timezone-safe).
 """
 import os
 from datetime import datetime, timedelta
+import pytz
 
 from src.logger import logger
 from src.teams_functions import get_teams_events
@@ -14,19 +15,32 @@ from src.google_calendar import (
 )
 from src.utils import parse_datetime
 
-def normalize_event(event):
-    """
-    Normalize event dict to a tuple (title, start, end) for comparison.
-    Dates are converted to ISO string (no microseconds, no tzinfo).
-    """
-    return (
-        event['titulo'],
-        parse_datetime(event['inicio']).isoformat(sep='T'),
-        parse_datetime(event['fim']).isoformat(sep='T')
-    )
+# Set your local timezone (should match Teams timezone)
+LOCAL_TZ = pytz.timezone('America/Sao_Paulo')
+
+def to_local(dt):
+    if dt.tzinfo is None:
+        # Assume naive datetimes are local
+        return LOCAL_TZ.localize(dt)
+    return dt.astimezone(LOCAL_TZ)
+
+def normalize_event(event, source):
+    title = event['titulo'].strip() if event['titulo'] else ''
+    start_raw = parse_datetime(event['inicio'])
+    end_raw = parse_datetime(event['fim'])
+    if source == 'google':
+        # Google events are in UTC, convert to local time
+        start = start_raw.astimezone(LOCAL_TZ).replace(tzinfo=None, microsecond=0)
+        end = end_raw.astimezone(LOCAL_TZ).replace(tzinfo=None, microsecond=0)
+    else:
+        # Teams events are already in local time
+        start = to_local(start_raw).replace(tzinfo=None, microsecond=0)
+        end = to_local(end_raw).replace(tzinfo=None, microsecond=0)
+    logger.debug(f"NORMALIZE({source}): title={title} raw_start={start_raw} raw_end={end_raw} norm_start={start} norm_end={end}")
+    return (title, start.isoformat(sep='T'), end.isoformat(sep='T'))
 
 def main():
-    logger.info("Calendar Sync Process Starting (two-way sync)")
+    logger.info("Calendar Sync Process Starting (optimized two-way sync, timezone-safe)")
 
     # 1. Fetch Teams events
     logger.info("1. Fetching Teams events for sync window...")
@@ -39,81 +53,68 @@ def main():
     google_events = get_google_events(svc, start, end)
     logger.info(f"Found {len(google_events)} events in Google Calendar")
 
-    # 3. Build normalized sets for comparison
-    teams_set = set()
+    # 3. Build lookup dicts for fast existence checks
+    teams_dict = {}
     cancelado_events = []
     for ev in teams_events:
-        if ev['titulo'].startswith("Cancelado:"):
+        if ev['titulo'] and ev['titulo'].startswith("Cancelado:"):
             cancelado_events.append(ev)
         else:
-            teams_set.add(normalize_event(ev))
+            teams_dict[normalize_event(ev, 'teams')] = ev
 
-    google_set = set(normalize_event(ev) for ev in google_events)
+    google_dict = {}
+    for ev in google_events:
+        google_dict[normalize_event(ev, 'google')] = ev
 
     # 4. Handle 'Cancelado:' events (delete originals from Google Calendar)
     logger.info("3. Handling 'Cancelado:' events from Teams...")
     for cancel_ev in cancelado_events:
-        # Find the original event title (remove 'Cancelado: ')
         original_title = cancel_ev['titulo'].replace("Cancelado:", "").strip()
-        original_start = parse_datetime(cancel_ev['inicio'])
-        original_end = parse_datetime(cancel_ev['fim'])
-        # Try to find a matching event in Google Calendar
-        for g_ev in google_events:
-            if (g_ev['titulo'] == original_title and
-                parse_datetime(g_ev['inicio']) == original_start and
-                parse_datetime(g_ev['fim']) == original_end):
-                # Delete the event by ID
-                remover_evento_google_by_id(
-                    svc,
-                    g_ev.get('id', None),
-                    g_ev['titulo'],
-                    g_ev['inicio'],
-                    g_ev['fim']
-                )
-                logger.info(f"Deleted event due to 'Cancelado:': {original_title} ({original_start} - {original_end})")
-                break
+        original_start = to_local(parse_datetime(cancel_ev['inicio'])).replace(tzinfo=None, microsecond=0)
+        original_end = to_local(parse_datetime(cancel_ev['fim'])).replace(tzinfo=None, microsecond=0)
+        key = (original_title, original_start.isoformat(sep='T'), original_end.isoformat(sep='T'))
+        g_ev = google_dict.get(key)
+        if g_ev:
+            remover_evento_google_by_id(
+                svc,
+                g_ev.get('id', None),
+                g_ev['titulo'],
+                g_ev['inicio'],
+                g_ev['fim']
+            )
+            logger.info(f"Deleted event due to 'Cancelado:': {original_title} ({original_start} - {original_end})")
         else:
             logger.info(f"No matching event found in Google Calendar for 'Cancelado:' {original_title}")
 
-    # 5. Teams → Google Calendar: create missing events
+    # 5. Teams → Google Calendar: create only events not present in Google Calendar
     logger.info("4. Creating events missing in Google Calendar...")
-    to_create = teams_set - google_set
-    for titulo, inicio, fim in to_create:
-        # Double-check: do not create 'Cancelado:' events
-        if titulo.startswith("Cancelado:"):
-            continue
-        ev = {
-            'titulo': titulo,
-            'inicio': inicio,
-            'fim': fim
-        }
-        criar_evento_google(svc, ev)
-        logger.info(f"Created event in Google Calendar: {titulo} ({inicio} - {fim})")
-    if not to_create:
+    for key, ev in teams_dict.items():
+        if key not in google_dict:
+            criar_evento_google(svc, {
+                'titulo': ev['titulo'],
+                'inicio': to_local(parse_datetime(ev['inicio'])).replace(tzinfo=None, microsecond=0).isoformat(sep='T'),
+                'fim': to_local(parse_datetime(ev['fim'])).replace(tzinfo=None, microsecond=0).isoformat(sep='T')
+            })
+            logger.info(f"Created event in Google Calendar: {ev['titulo']} ({ev['inicio']} - {ev['fim']})")
+    if not any(key not in google_dict for key in teams_dict):
         logger.info("No new events to create in Google Calendar.")
 
-    # 6. Google Calendar → Teams: delete events not in Teams
+    # 6. Google Calendar → Teams: delete only events not present in Teams
     logger.info("5. Deleting events from Google Calendar not present in Teams...")
-    to_delete = google_set - teams_set
-    for titulo, inicio, fim in to_delete:
-        # Find the event in Google Calendar to get its ID
-        for g_ev in google_events:
-            if (g_ev['titulo'] == titulo and
-                parse_datetime(g_ev['inicio']).isoformat(sep='T') == inicio and
-                parse_datetime(g_ev['fim']).isoformat(sep='T') == fim):
-                remover_evento_google_by_id(
-                    svc,
-                    g_ev.get('id', None),
-                    g_ev['titulo'],
-                    g_ev['inicio'],
-                    g_ev['fim']
-                )
-                logger.info(f"Deleted event from Google Calendar: {titulo} ({inicio} - {fim})")
-                break
-    if not to_delete:
+    for key, g_ev in google_dict.items():
+        if key not in teams_dict:
+            remover_evento_google_by_id(
+                svc,
+                g_ev.get('id', None),
+                g_ev['titulo'],
+                g_ev['inicio'],
+                g_ev['fim']
+            )
+            logger.info(f"Deleted event from Google Calendar: {g_ev['titulo']} ({g_ev['inicio']} - {g_ev['fim']})")
+    if not any(key not in teams_dict for key in google_dict):
         logger.info("No events to delete from Google Calendar.")
 
-    logger.info("Calendar Sync Process Completed (two-way sync)")
+    logger.info("Calendar Sync Process Completed (optimized two-way sync, timezone-safe)")
 
 if __name__ == '__main__':
     main()
