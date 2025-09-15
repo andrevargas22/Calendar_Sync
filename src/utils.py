@@ -52,5 +52,5 @@ def get_sync_period():
     start = seg_atual.replace(hour=START_HOUR, minute=0, second=0, microsecond=0)
     end = (seg_atual + timedelta(days=DAYS_RANGE)).replace(hour=END_HOUR, minute=0, second=0, microsecond=0)
     
-    logger.info(f"📅 Sync period: {start.strftime('%d/%m')} - {end.strftime('%d/%m')}")
+    logger.info(f"Sync period: {start.strftime('%d/%m')} - {end.strftime('%d/%m')}")
     return start, end

@@ -69,10 +69,10 @@ def get_teams_events():
         return out, start, end
         
     except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Error fetching Teams calendar: {e}")
+        logger.error(f"Error fetching Teams calendar: {e}")
         if hasattr(e, 'response') and e.response is not None:
             logger.error(f"HTTP Status: {e.response.status_code}")
         return None, None, None
     except Exception as e:
-        logger.error(f"❌ Error parsing Teams calendar: {e}")
+        logger.error(f"Error parsing Teams calendar: {e}")
         return None, None, None

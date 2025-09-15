@@ -70,17 +70,17 @@ def get_calendar_service():
         
         http = httplib2.Http(timeout=30)
         service = build('calendar', 'v3', credentials=credentials, http=http)
-        logger.info("✅ Google Calendar API service initialized successfully")
+        logger.info("Google Calendar API service initialized successfully")
         return service
         
     except ValueError as e:
-        logger.error(f"❌ Configuration error: {e}")
+        logger.error(f"Configuration error: {e}")
         raise
     except json.JSONDecodeError as e:
-        logger.error(f"❌ Invalid JSON in service account credentials: {e}")
+        logger.error(f"Invalid JSON in service account credentials: {e}")
         raise
     except Exception as e:
-        logger.error(f"❌ Unexpected error during authentication: {e}")
+        logger.error(f"Unexpected error during authentication: {e}")
 
 def get_google_events(svc, start, end):
     """
@@ -145,14 +145,14 @@ def get_google_events(svc, start, end):
         return out
         
     except HttpError as e:
-        logger.error(f"❌ Google Calendar API error: {e}")
+        logger.error(f"Google Calendar API error: {e}")
         if e.resp.status == 403:
             logger.error("Permission denied. Check if the service account has calendar access")
         elif e.resp.status == 404:
             logger.error(f"Calendar not found. Check CALENDAR_ID: {CALENDAR_ID}")
         raise
     except Exception as e:
-        logger.error(f"❌ Unexpected error fetching events: {e}")
+        logger.error(f"Unexpected error fetching events: {e}")
         raise
 
 def criar_evento_google(svc, ev):
@@ -185,20 +185,20 @@ def criar_evento_google(svc, ev):
         result = svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
         
         event_id = result.get('id', 'unknown')
-        logger.info(f"✅ Created event in Google Calendar: {ev['titulo']} (ID: {event_id[:8]}...)")
+        logger.info(f"Created event in Google Calendar: {ev['titulo']} (ID: {event_id[:8]}...)")
         
     except HttpError as e:
-        logger.error(f"❌ Google Calendar API error creating event '{ev.get('titulo', 'unknown')}': {e}")
+        logger.error(f"Google Calendar API error creating event '{ev.get('titulo', 'unknown')}': {e}")
         if e.resp.status == 403:
             logger.error("Permission denied. Check if the service account can create events")
         elif e.resp.status == 404:
             logger.error(f"Calendar not found. Check CALENDAR_ID: {CALENDAR_ID}")
         raise
     except ValueError as e:
-        logger.error(f"❌ Invalid event data: {e}")
+        logger.error(f"Invalid event data: {e}")
         raise
     except Exception as e:
-        logger.error(f"❌ Unexpected error creating event: {e}")
+        logger.error(f"Unexpected error creating event: {e}")
         raise
 
 def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_end):
@@ -229,7 +229,7 @@ def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_e
             eventId=event_id
         ).execute()
         
-        logger.info(f"🗑️ Deleted event from Google Calendar: {event_title}")
+        logger.info(f"Deleted event from Google Calendar: {event_title}")
         return True
         
     except HttpError as e:
@@ -242,5 +242,5 @@ def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_e
             logger.error(f"Google Calendar API error deleting event '{event_title}': {e}")
         return False
     except Exception as e:
-        logger.error(f"❌ Unexpected error deleting event '{event_title}': {e}")
+        logger.error(f"Unexpected error deleting event '{event_title}': {e}")
         return False
