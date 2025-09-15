@@ -4,6 +4,8 @@ Google Calendar functions.
 
 from datetime import datetime, timedelta
 import json
+import time
+import random
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -32,6 +34,10 @@ def get_calendar_service():
  
         logger.info("Initializing Google Calendar API service...")
         credentials_info = json.loads(GOOGLE_SERVICE_ACCOUNT_KEY)
+        required_keys = {"type", "project_id", "private_key", "client_email"}
+        missing = [k for k in required_keys if k not in credentials_info or not credentials_info.get(k)]
+        if missing:
+            raise ValueError(f"Service account credentials missing required fields: {missing}")
         
         credentials = service_account.Credentials.from_service_account_info(
             credentials_info,
@@ -51,6 +57,30 @@ def get_calendar_service():
         raise
     except Exception as e:
         logger.error(f"Unexpected error during authentication: {e}")
+
+def _retry(callable_fn, *, max_attempts=4, base_delay=0.5, op_name="api_call"):
+    """Simple exponential backoff retry for transient Google API errors."""
+    attempt = 0
+    while True:
+        try:
+            return callable_fn()
+        except HttpError as e:
+            status = getattr(e.resp, 'status', None)
+            if status in {429, 500, 502, 503, 504} and attempt < max_attempts - 1:
+                delay = base_delay * (2 ** attempt) * (1 + random.random()*0.25)
+                logger.warning(f"Transient error {status} during {op_name}, retrying in {delay:.2f}s (attempt {attempt+1}/{max_attempts})")
+                time.sleep(delay)
+                attempt += 1
+                continue
+            raise
+        except Exception:
+            if attempt < max_attempts - 1:
+                delay = base_delay * (2 ** attempt) * (1 + random.random()*0.25)
+                logger.warning(f"Error during {op_name}, retrying in {delay:.2f}s (attempt {attempt+1}/{max_attempts})")
+                time.sleep(delay)
+                attempt += 1
+                continue
+            raise
 
 def get_google_events(svc, start, end):
     """
@@ -72,14 +102,16 @@ def get_google_events(svc, start, end):
         extended_end = end + timedelta(days=1)
         logger.info(f"Fetching Google Calendar events from {start.date()} to {extended_end.date()}")
         
-        evs = svc.events().list(
-            calendarId=CALENDAR_ID,
-            timeMin=start.isoformat()+'Z',
-            timeMax=extended_end.isoformat()+'Z',
-            singleEvents=True, 
-            orderBy='startTime',
-            maxResults=2500
-        ).execute().get('items', [])
+        def _list_call():
+            return svc.events().list(
+                calendarId=CALENDAR_ID,
+                timeMin=start.isoformat()+'Z',
+                timeMax=extended_end.isoformat()+'Z',
+                singleEvents=True,
+                orderBy='startTime',
+                maxResults=2500
+            ).execute()
+        evs = _retry(_list_call, op_name="events.list").get('items', [])
         
         logger.info(f"Retrieved {len(evs)} raw events from Google Calendar")
         
@@ -153,7 +185,9 @@ def criar_evento_google(svc, ev):
         }
         
         logger.debug(f"Creating event: {ev['titulo']}")
-        result = svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
+        def _insert_call():
+            return svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
+        result = _retry(_insert_call, op_name="events.insert")
         
         event_id = result.get('id', 'unknown')
         logger.info(f"Created event in Google Calendar: {ev['titulo']} (ID: {event_id[:8]}...)")
@@ -196,10 +230,12 @@ def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_e
         
         event_id_partial = event_id[:8] if len(event_id) > 8 else event_id
         logger.debug(f"Deleting event: {event_title} (ID: {event_id_partial}...)")
-        svc.events().delete(
-            calendarId=CALENDAR_ID,
-            eventId=event_id
-        ).execute()
+        def _delete_call():
+            return svc.events().delete(
+                calendarId=CALENDAR_ID,
+                eventId=event_id
+            ).execute()
+        _retry(_delete_call, op_name="events.delete")
         
         logger.info(f"Deleted event from Google Calendar: {event_title}")
         return True

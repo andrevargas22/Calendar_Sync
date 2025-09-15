@@ -1,3 +1,49 @@
 *.json
 *.pickle
 __pycache__/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+secrets*/
+
+# Python cache / build
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+coverage/
+.coverage*
+
+# Logs
+*.log
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Temporary
+*.tmp
+*.swp
+*.bak
+
+# Docker / packaging
+*.tar
+
+# Security: avoid accidental private key export filenames
+id_rsa*
+id_ecdsa*
