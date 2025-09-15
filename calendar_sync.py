@@ -38,7 +38,7 @@ def normalize_event(event, source):
     else:
         start = to_local(start_raw).replace(tzinfo=None, microsecond=0)
         end = to_local(end_raw).replace(tzinfo=None, microsecond=0)
-    logger.debug(f"NORMALIZE({source}): title={title} raw_start={start_raw} raw_end={end_raw} norm_start={start} norm_end={end}")
+    logger.debug(f"NORMALIZE({source}): processing event - raw_start={start_raw} raw_end={end_raw} norm_start={start} norm_end={end}")
     return (title, start.isoformat(sep='T'), end.isoformat(sep='T'))
 
 def main():

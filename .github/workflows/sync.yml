@@ -10,23 +10,30 @@ env:
   TEAMS_ICS_URL: ${{ secrets.TEAMS_ICS_URL }}
   GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
   GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
-  
+
+permissions:
+  contents: read
+
 jobs:
   sync-calendar:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --require-hashes --no-deps -r requirements.txt || pip install -r requirements.txt
 
       - name: Run sync script
         run: python calendar_sync.py

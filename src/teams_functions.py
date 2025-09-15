@@ -30,11 +30,11 @@ def get_teams_events():
             return None, None, None
         
         # Add timeout and proper headers
-        headers = {'User-Agent': 'Calendar-Sync/1.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (compatible; Calendar-Client)'}
         resp = requests.get(TEAMS_ICS_URL, timeout=30, headers=headers)
         resp.raise_for_status()
         
-        logger.info(f"Successfully fetched Teams calendar data ({len(resp.text)} chars)")
+        logger.info("Successfully fetched Teams calendar data")
         
         # Parse calendar data
         ical = ICALCalendar.from_ical(resp.text)

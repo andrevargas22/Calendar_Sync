@@ -90,7 +90,7 @@ def get_google_events(svc, start, end):
                 f = ev['end'].get('dateTime') or ev['end'].get('date')
                 
                 if not s or not f:
-                    logger.warning(f"Event {ev.get('id')} has missing start/end times, skipping")
+                    logger.warning(f"Event with ID {ev.get('id', 'unknown')[:8]}... has missing start/end times, skipping")
                     continue
                 
                 s = datetime.fromisoformat(s.replace('Z',''))
@@ -108,7 +108,8 @@ def get_google_events(svc, start, end):
                     'fim': f
                 })
             except Exception as e:
-                logger.warning(f"Error processing event {ev.get('id', 'unknown')}: {e}")
+                event_id_partial = ev.get('id', 'unknown')[:8] if ev.get('id') else 'unknown'
+                logger.warning(f"Error processing event {event_id_partial}...: {e}")
                 continue
         
         logger.info(f"Successfully processed {len(out)} events")
@@ -119,7 +120,7 @@ def get_google_events(svc, start, end):
         if e.resp.status == 403:
             logger.error("Permission denied. Check if the service account has calendar access")
         elif e.resp.status == 404:
-            logger.error(f"Calendar not found. Check CALENDAR_ID: {CALENDAR_ID}")
+            logger.error("Calendar not found. Check your GOOGLE_CALENDAR_ID configuration")
         raise
     except Exception as e:
         logger.error(f"Unexpected error fetching events: {e}")
@@ -162,7 +163,7 @@ def criar_evento_google(svc, ev):
         if e.resp.status == 403:
             logger.error("Permission denied. Check if the service account can create events")
         elif e.resp.status == 404:
-            logger.error(f"Calendar not found. Check CALENDAR_ID: {CALENDAR_ID}")
+            logger.error("Calendar not found. Check your GOOGLE_CALENDAR_ID configuration")
         raise
     except ValueError as e:
         logger.error(f"Invalid event data: {e}")
@@ -193,7 +194,8 @@ def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_e
             logger.warning(f"Cannot delete event '{event_title}': missing event ID")
             return False
         
-        logger.debug(f"Deleting event: {event_title} (ID: {event_id[:8]}...)")
+        event_id_partial = event_id[:8] if len(event_id) > 8 else event_id
+        logger.debug(f"Deleting event: {event_title} (ID: {event_id_partial}...)")
         svc.events().delete(
             calendarId=CALENDAR_ID,
             eventId=event_id
