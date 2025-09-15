@@ -10,7 +10,7 @@ env:
   TEAMS_ICS_URL: ${{ secrets.TEAMS_ICS_URL }}
   GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
   GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
-
+  
 jobs:
   sync-calendar:
     runs-on: ubuntu-latest

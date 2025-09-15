@@ -3,6 +3,7 @@ Calendar Sync - Synchronizes Microsoft Teams calendar with Google Calendar.
 """
 
 import os
+import sys
 from datetime import datetime, timedelta
 import pytz
 
@@ -15,6 +16,11 @@ from src.google_calendar import (
     remover_evento_google_by_id
 )
 from src.utils import parse_datetime
+from src.config import (
+    TEAMS_ICS_URL,
+    CREDENTIALS_JSON,
+    CALENDAR_ID,
+)
 
 # Set timezone
 LOCAL_TZ = pytz.timezone('America/Sao_Paulo')
@@ -40,9 +46,32 @@ def normalize_event(event, source):
 def main():
     logger.info("Calendar Sync Process Starting")
 
+    # 0. Validate configuration
+    logger.info("0. Validating configuration...")
+    required_configs = {
+        "TEAMS_ICS_URL": TEAMS_ICS_URL,
+        "GOOGLE_CREDENTIALS": CREDENTIALS_JSON,
+        "GOOGLE_CALENDAR_ID": CALENDAR_ID,
+    }
+
+    missing_configs = [
+        key for key, value in required_configs.items() if not value
+    ]
+
+    if missing_configs:
+        logger.error(
+            f"Missing required environment variables: {', '.join(missing_configs)}"
+        )
+        sys.exit(1)
+
+    logger.info("Configuration validated successfully.")
+
     # 1. Fetch Teams events
     logger.info("1. Fetching Teams events for sync window...")
     teams_events, start, end = get_teams_events()
+    if teams_events is None:
+        logger.error("Halting execution due to error fetching Teams events.")
+        sys.exit(1)
     logger.info(f"Found {len(teams_events)} events from Teams")
 
     # 2. Fetch Google Calendar events

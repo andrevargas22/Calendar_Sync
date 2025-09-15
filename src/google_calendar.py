@@ -6,12 +6,44 @@ from datetime import datetime, timedelta
 import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from pathlib import Path
-import csv
+from googleapiclient.errors import HttpError
+import httplib2
 
 from src.logger import logger
-from src.config import SCOPES, CALENDAR_ID, CREDENTIALS_JSON, TIMEZONE, CACHE_FILE
-from src.utils import parse_datetime
+from src.config import SCOPES, CALENDAR_ID, CREDENTIALS_JSON, TIMEZONE
+
+
+def validate_service_account_key(credentials_json: str) -> bool:
+    """
+    Validate if the service account JSON has all required fields.
+    
+    Args:
+        credentials_json: JSON string containing service account credentials
+        
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    try:
+        creds = json.loads(credentials_json)
+        required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
+        missing_fields = [field for field in required_fields if field not in creds]
+        
+        if missing_fields:
+            logger.error(f"Service account JSON missing required fields: {missing_fields}")
+            return False
+            
+        if creds.get('type') != 'service_account':
+            logger.error("Invalid credential type. Expected 'service_account'")
+            return False
+            
+        return True
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON format in service account credentials: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error validating service account credentials: {e}")
+        return False
+    
 
 def get_calendar_service():
     """
@@ -19,20 +51,36 @@ def get_calendar_service():
     
     Returns:
         Google Calendar API service
+        
+    Raises:
+        ValueError: If credentials are missing or invalid
+        json.JSONDecodeError: If credentials JSON is malformed
+        Exception: If authentication fails
     """
     try:
         if not CREDENTIALS_JSON:
-            raise ValueError("GOOGLE_CREDENTIALS environment variable not found")
-        credentials_info = json.loads(CREDENTIALS_JSON)
+            raise ValueError("Credential environment variable is not set")
+        
+        logger.info("Initializing Google Calendar API service...")
+                
         credentials = service_account.Credentials.from_service_account_info(
-            credentials_info,
+            json.loads(CREDENTIALS_JSON),
             scopes=SCOPES
         )
         
-        return build('calendar', 'v3', credentials=credentials)
-    except Exception as e:
-        logger.error(f"❌ Error authenticating with Service Account: {e}")
+        http = httplib2.Http(timeout=30)
+        service = build('calendar', 'v3', credentials=credentials, http=http)
+        logger.info("✅ Google Calendar API service initialized successfully")
+        return service
+        
+    except ValueError as e:
+        logger.error(f"❌ Configuration error: {e}")
         raise
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Invalid JSON in service account credentials: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error during authentication: {e}")
 
 def get_google_events(svc, start, end):
     """
@@ -45,55 +93,117 @@ def get_google_events(svc, start, end):
         
     Returns:
         List of events
+        
+    Raises:
+        HttpError: If Google Calendar API request fails
+        Exception: If data processing fails
     """
-    extended_end = end + timedelta(days=1)
-    evs = svc.events().list(
-        calendarId=CALENDAR_ID,
-        timeMin=start.isoformat()+'Z',
-        timeMax=extended_end.isoformat()+'Z',
-        singleEvents=True, 
-        orderBy='startTime',
-        maxResults=2500
-    ).execute().get('items',[])
-    
-    out = []
-    for ev in evs:
-        s = ev['start'].get('dateTime') or ev['start'].get('date')
-        f = ev['end'].get('dateTime') or ev['end'].get('date')
-        s = datetime.fromisoformat(s.replace('Z',''))
-        f = datetime.fromisoformat(f.replace('Z',''))
-        if s.tzinfo is not None:
-            s = s.astimezone().replace(tzinfo=None)
-        if f.tzinfo is not None:
-            f = f.astimezone().replace(tzinfo=None)
-        out.append({
-            'id': ev.get('id'),
-            'titulo': ev.get('summary'),
-            'inicio': s,
-            'fim': f
-        })
-    
-    return out
+    try:
+        extended_end = end + timedelta(days=1)
+        logger.info(f"Fetching Google Calendar events from {start.date()} to {extended_end.date()}")
+        
+        evs = svc.events().list(
+            calendarId=CALENDAR_ID,
+            timeMin=start.isoformat()+'Z',
+            timeMax=extended_end.isoformat()+'Z',
+            singleEvents=True, 
+            orderBy='startTime',
+            maxResults=2500
+        ).execute().get('items', [])
+        
+        logger.info(f"Retrieved {len(evs)} raw events from Google Calendar")
+        
+        out = []
+        for ev in evs:
+            try:
+                s = ev['start'].get('dateTime') or ev['start'].get('date')
+                f = ev['end'].get('dateTime') or ev['end'].get('date')
+                
+                if not s or not f:
+                    logger.warning(f"Event {ev.get('id')} has missing start/end times, skipping")
+                    continue
+                
+                s = datetime.fromisoformat(s.replace('Z',''))
+                f = datetime.fromisoformat(f.replace('Z',''))
+                
+                if s.tzinfo is not None:
+                    s = s.astimezone().replace(tzinfo=None)
+                if f.tzinfo is not None:
+                    f = f.astimezone().replace(tzinfo=None)
+                    
+                out.append({
+                    'id': ev.get('id'),
+                    'titulo': ev.get('summary', 'Untitled Event'),
+                    'inicio': s,
+                    'fim': f
+                })
+            except Exception as e:
+                logger.warning(f"Error processing event {ev.get('id', 'unknown')}: {e}")
+                continue
+        
+        logger.info(f"Successfully processed {len(out)} events")
+        return out
+        
+    except HttpError as e:
+        logger.error(f"❌ Google Calendar API error: {e}")
+        if e.resp.status == 403:
+            logger.error("Permission denied. Check if the service account has calendar access")
+        elif e.resp.status == 404:
+            logger.error(f"Calendar not found. Check CALENDAR_ID: {CALENDAR_ID}")
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error fetching events: {e}")
+        raise
 
 def criar_evento_google(svc, ev):
     """
-    Create an event in Google Calendar.
+    Create an event in Google Calendar with improved error handling.
     
     Args:
         svc: Google Calendar API service
-        ev: Event dictionary
+        ev: Event dictionary with keys 'titulo', 'inicio', 'fim'
+        
+    Raises:
+        HttpError: If Google Calendar API request fails
+        ValueError: If event data is invalid
+        Exception: If unexpected error occurs
     """
-    body = {
-        'summary': ev['titulo'],
-        'start': {'dateTime': ev['inicio'], 'timeZone': TIMEZONE},
-        'end':   {'dateTime': ev['fim'],    'timeZone': TIMEZONE},
-    }
-    svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
-    logger.info(f"Created in Google Calendar: {ev['titulo']} ({ev['inicio']} - {ev['fim']})")
+    try:
+        # Validate event data
+        required_fields = ['titulo', 'inicio', 'fim']
+        missing_fields = [field for field in required_fields if not ev.get(field)]
+        if missing_fields:
+            raise ValueError(f"Event missing required fields: {missing_fields}")
+        
+        body = {
+            'summary': ev['titulo'],
+            'start': {'dateTime': ev['inicio'], 'timeZone': TIMEZONE},
+            'end': {'dateTime': ev['fim'], 'timeZone': TIMEZONE},
+        }
+        
+        logger.debug(f"Creating event: {ev['titulo']}")
+        result = svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
+        
+        event_id = result.get('id', 'unknown')
+        logger.info(f"✅ Created event in Google Calendar: {ev['titulo']} (ID: {event_id[:8]}...)")
+        
+    except HttpError as e:
+        logger.error(f"❌ Google Calendar API error creating event '{ev.get('titulo', 'unknown')}': {e}")
+        if e.resp.status == 403:
+            logger.error("Permission denied. Check if the service account can create events")
+        elif e.resp.status == 404:
+            logger.error(f"Calendar not found. Check CALENDAR_ID: {CALENDAR_ID}")
+        raise
+    except ValueError as e:
+        logger.error(f"❌ Invalid event data: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error creating event: {e}")
+        raise
 
 def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_end):
     """
-    Remove an event from Google Calendar by ID.
+    Remove an event from Google Calendar by ID with improved error handling.
     
     Args:
         svc: Google Calendar API service
@@ -103,92 +213,34 @@ def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_e
         event_end: Event end time (for logging)
         
     Returns:
-        bool: True if deleted successfully
+        bool: True if deleted successfully, False otherwise
+        
+    Raises:
+        Exception: Only if critical error occurs
     """
     try:
+        if not event_id:
+            logger.warning(f"Cannot delete event '{event_title}': missing event ID")
+            return False
+        
+        logger.debug(f"Deleting event: {event_title} (ID: {event_id[:8]}...)")
         svc.events().delete(
             calendarId=CALENDAR_ID,
             eventId=event_id
         ).execute()
-        logger.info(f"Deleted event from Google Calendar: {event_title} ({event_start} - {event_end})")
+        
+        logger.info(f"🗑️ Deleted event from Google Calendar: {event_title}")
         return True
-    except Exception as e:
-        logger.error(f"Error deleting event {event_title}: {e}")
+        
+    except HttpError as e:
+        if e.resp.status == 404:
+            logger.warning(f"Event '{event_title}' not found (already deleted?)")
+            return True  # Consider it successful if already gone
+        elif e.resp.status == 403:
+            logger.error(f"Permission denied deleting event '{event_title}'")
+        else:
+            logger.error(f"Google Calendar API error deleting event '{event_title}': {e}")
         return False
-
-def buscar_e_deletar_cancelados(svc):
-    """
-    Find and delete all 'Cancelado:' events and their original pairs.
-    
-    Args:
-        svc: Google Calendar API service
-    """
-    from src.config import DAYS_BEFORE, DAYS_AFTER
-    
-    now = datetime.now()
-    start_search = now - timedelta(days=DAYS_BEFORE)
-    end_search = now + timedelta(days=DAYS_AFTER)
-    
-    events = svc.events().list(
-        calendarId=CALENDAR_ID,
-        timeMin=start_search.isoformat()+'Z',
-        timeMax=end_search.isoformat()+'Z',
-        singleEvents=True,
-        maxResults=2500
-    ).execute().get('items', [])
-    
-    # Index by (title, start, end)
-    event_map = {}
-    for ev in events:
-        title = ev.get('summary', '')
-        s = ev['start'].get('dateTime') or ev['start'].get('date')
-        f = ev['end'].get('dateTime') or ev['end'].get('date')
-        s_dt = parse_datetime(s)
-        f_dt = parse_datetime(f)
-        event_map.setdefault((title, s_dt, f_dt), []).append(ev)
-
-    to_delete = set()
-    cache_to_remove = set()
-    for (title, s_dt, f_dt), ev_list in event_map.items():
-        if title.startswith("Cancelado:"):
-            # Always delete the canceled event
-            to_delete.add(ev_list[0]['id'])
-            cache_to_remove.add((title, s_dt.isoformat(sep='T'), f_dt.isoformat(sep='T')))
-            
-            # Try to find and delete the original event too
-            original_title = title.replace("Cancelado:", "").strip()
-            original_key = (original_title, s_dt, f_dt)
-            if original_key in event_map:
-                to_delete.add(event_map[original_key][0]['id'])
-                cache_to_remove.add((original_title, s_dt.isoformat(sep='T'), f_dt.isoformat(sep='T')))
-                logger.info(f"Found cancel pair, will delete both: '{title}' and '{original_title}' at {s_dt}")
-            else:
-                logger.info(f"Deleting cancelado event (no pair found): '{title}' at {s_dt}")
-
-    # Delete events from Google Calendar
-    for event_id in to_delete:
-        for ev in events:
-            if ev['id'] == event_id:
-                event_title = ev.get('summary', '')
-                event_start = ev['start'].get('dateTime') or ev['start'].get('date')
-                event_end = ev['end'].get('dateTime') or ev['end'].get('date')
-                remover_evento_google_by_id(svc, event_id, event_title, event_start, event_end)
-                break
-
-    # Remove from local cache if using local file
-    if cache_to_remove and Path(CACHE_FILE).exists():
-        cache = set()
-        with open(CACHE_FILE, newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                cache.add((row['titulo'], row['inicio'], row['fim']))
-        
-        # Remove marked events
-        cache = {item for item in cache if item not in cache_to_remove}
-        with open(CACHE_FILE, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=['titulo', 'inicio', 'fim'])
-            writer.writeheader()
-            for titulo, inicio, fim in cache:
-                writer.writerow({'titulo': titulo, 'inicio': inicio, 'fim': fim})
-        
-        logger.info(f"Removed {len(cache_to_remove)} events from cache.")
+    except Exception as e:
+        logger.error(f"❌ Unexpected error deleting event '{event_title}': {e}")
+        return False
