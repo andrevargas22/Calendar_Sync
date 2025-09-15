@@ -14,26 +14,23 @@ def parse_datetime(dtstr):
     """
     # Remove any timezone information and standardize format
     if isinstance(dtstr, str):
-        # Replace T with space for consistent formatting
+        
         dtstr = dtstr.replace('T', ' ')
         
         # Handle timezone information
         if '+' in dtstr:
             dtstr = dtstr.split('+')[0]
-        elif '-' in dtstr[11:]:  # Only check for timezone in the time part
-            dtstr = dtstr[:19]  # Keep only YYYY-MM-DD HH:MM:SS part
+        elif '-' in dtstr[11:]:  
+            dtstr = dtstr[:19]  
             
         # Parse the datetime
         dt = datetime.fromisoformat(dtstr.strip())
     else:
-        # If already a datetime object
         dt = dtstr
         
-    # Ensure no timezone info and no microseconds
     if dt.tzinfo is not None:
         dt = dt.replace(tzinfo=None)
     
-    # Remove microseconds to ensure consistent comparison
     return dt.replace(microsecond=0)
 
 def get_sync_period():

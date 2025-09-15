@@ -10,41 +10,9 @@ from googleapiclient.errors import HttpError
 import httplib2
 
 from src.logger import logger
-from src.config import SCOPES, CALENDAR_ID, CREDENTIALS_JSON, TIMEZONE
-
-
-def validate_service_account_key(credentials_json: str) -> bool:
-    """
-    Validate if the service account JSON has all required fields.
+from src.config import SCOPES, CALENDAR_ID, GOOGLE_SERVICE_ACCOUNT_KEY, TIMEZONE
     
-    Args:
-        credentials_json: JSON string containing service account credentials
-        
-    Returns:
-        bool: True if valid, False otherwise
-    """
-    try:
-        creds = json.loads(credentials_json)
-        required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
-        missing_fields = [field for field in required_fields if field not in creds]
-        
-        if missing_fields:
-            logger.error(f"Service account JSON missing required fields: {missing_fields}")
-            return False
-            
-        if creds.get('type') != 'service_account':
-            logger.error("Invalid credential type. Expected 'service_account'")
-            return False
-            
-        return True
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON format in service account credentials: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"Error validating service account credentials: {e}")
-        return False
     
-
 def get_calendar_service():
     """
     Initialize the Calendar API using Service Account.
@@ -58,17 +26,19 @@ def get_calendar_service():
         Exception: If authentication fails
     """
     try:
-        if not CREDENTIALS_JSON:
-            raise ValueError("Credential environment variable is not set")
+        if not GOOGLE_SERVICE_ACCOUNT_KEY:
+            raise ValueError("GOOGLE_SERVICE_ACCOUNT_KEY environment variable is not set")
         
+ 
         logger.info("Initializing Google Calendar API service...")
-                
+        credentials_info = json.loads(GOOGLE_SERVICE_ACCOUNT_KEY)
+        
         credentials = service_account.Credentials.from_service_account_info(
-            json.loads(CREDENTIALS_JSON),
+            credentials_info,
             scopes=SCOPES
         )
         
-        http = httplib2.Http(timeout=30)
+        http = httplib2.Http(timeout=30)  
         service = build('calendar', 'v3', credentials=credentials, http=http)
         logger.info("Google Calendar API service initialized successfully")
         return service

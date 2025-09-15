@@ -8,7 +8,7 @@ import os
 TEAMS_ICS_URL = os.environ.get('TEAMS_ICS_URL')
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID')
-CREDENTIALS_JSON = os.environ.get('GOOGLE_CREDENTIALS')
+GOOGLE_SERVICE_ACCOUNT_KEY = os.environ.get('GOOGLE_SERVICE_ACCOUNT_KEY')
 TIMEZONE = 'America/Sao_Paulo'
 
 # Time range configuration

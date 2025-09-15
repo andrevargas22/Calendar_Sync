@@ -2,9 +2,7 @@
 Calendar Sync - Synchronizes Microsoft Teams calendar with Google Calendar.
 """
 
-import os
 import sys
-from datetime import datetime, timedelta
 import pytz
 
 from src.logger import logger
@@ -18,7 +16,7 @@ from src.google_calendar import (
 from src.utils import parse_datetime
 from src.config import (
     TEAMS_ICS_URL,
-    CREDENTIALS_JSON,
+    GOOGLE_SERVICE_ACCOUNT_KEY,
     CALENDAR_ID,
 )
 
@@ -50,7 +48,7 @@ def main():
     logger.info("0. Validating configuration...")
     required_configs = {
         "TEAMS_ICS_URL": TEAMS_ICS_URL,
-        "GOOGLE_CREDENTIALS": CREDENTIALS_JSON,
+        "GOOGLE_SERVICE_ACCOUNT_KEY": GOOGLE_SERVICE_ACCOUNT_KEY,
         "GOOGLE_CALENDAR_ID": CALENDAR_ID,
     }
 
