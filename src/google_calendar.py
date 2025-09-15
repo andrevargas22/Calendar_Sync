@@ -9,7 +9,6 @@ import random
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import httplib2
 
 from src.logger import logger
 from src.config import SCOPES, CALENDAR_ID, GOOGLE_SERVICE_ACCOUNT_KEY, TIMEZONE
@@ -43,9 +42,8 @@ def get_calendar_service():
             credentials_info,
             scopes=SCOPES
         )
-        
-        http = httplib2.Http(timeout=30)  
-        service = build('calendar', 'v3', credentials=credentials, http=http)
+
+        service = build('calendar', 'v3', credentials=credentials)
         logger.info("Google Calendar API service initialized successfully")
         return service
         
