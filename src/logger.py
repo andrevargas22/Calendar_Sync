@@ -1,3 +1,6 @@
+"""
+Logger configuration for the calendar synchronization application.
+"""
 import logging
 import os
 

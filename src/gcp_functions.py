@@ -1,4 +1,7 @@
-"""GCP and cache functions for the calendar sync application."""
+"""
+GCP and cache functions for the calendar sync application.
+"""
+
 import csv
 import io
 import json

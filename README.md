@@ -7,14 +7,7 @@ Sincroniza eventos do calendário do Microsoft Teams (via ICS) com o Google Cale
 - Busca eventos do Teams e do Google Calendar para o período configurado.
 - Remove do Google qualquer evento que não esteja mais no Teams.
 - Cria no Google qualquer evento novo do Teams.
-- Se um evento do Teams começar com `Cancelado:`, remove o evento original do Google.
-- Não cria eventos de cancelamento no Google.
 - O script é idempotente: rodar várias vezes não gera duplicidade.
-
-## Execução
-A sincronização roda automaticamente pelo GitHub Actions:
-- Horários: 7h e 12h (meio-dia) em dias úteis.
-- Não é necessário rodar manualmente.
 
 ## Configuração
 - Variáveis de ambiente (definidas nos secrets do Actions):

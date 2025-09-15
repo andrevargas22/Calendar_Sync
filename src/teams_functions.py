@@ -1,4 +1,7 @@
-"""Microsoft Teams calendar functions."""
+"""
+Microsoft Teams calendar functions.
+"""
+
 import requests
 from datetime import datetime, timedelta
 from icalendar import Calendar as ICALCalendar

@@ -1,4 +1,7 @@
-"""Configuration for the calendar sync application."""
+"""
+Configuration for the calendar sync application.
+"""
+
 import os
 
 # Base configuration

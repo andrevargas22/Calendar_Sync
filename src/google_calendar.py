@@ -1,4 +1,7 @@
-"""Google Calendar functions."""
+"""
+Google Calendar functions.
+"""
+
 from datetime import datetime, timedelta
 import json
 from google.oauth2 import service_account
