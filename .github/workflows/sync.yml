@@ -1,7 +1,6 @@
 name: Sync Teams Calendar to Google
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: '0 10 * * 1-5' # 7h BRT
     - cron: '0 15 * * 1-5' # 12h BRT
