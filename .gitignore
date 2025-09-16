@@ -47,3 +47,5 @@ Thumbs.db
 # Security: avoid accidental private key export filenames
 id_rsa*
 id_ecdsa*
+
+Makefile
