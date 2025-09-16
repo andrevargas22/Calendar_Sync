@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from src.logger import logger
-from src.config import SCOPES, CALENDAR_ID, GOOGLE_SERVICE_ACCOUNT_KEY, TIMEZONE
+from src.config import SCOPES, CALENDAR_ID, GOOGLE_SERVICE_ACCOUNT_KEY, TIMEZONE, LOG_MASK_TITLES, mask_title
     
     
 def get_calendar_service():
@@ -157,48 +157,48 @@ def get_google_events(svc, start, end):
         raise
 
 def criar_evento_google(svc, ev):
-    """
-    Create an event in Google Calendar with improved error handling.
-    
+    """Create an event in Google Calendar.
+
     Args:
         svc: Google Calendar API service
-        ev: Event dictionary with keys 'titulo', 'inicio', 'fim'
-        
-    Raises:
-        HttpError: If Google Calendar API request fails
-        ValueError: If event data is invalid
-        Exception: If unexpected error occurs
+        ev: dict with keys 'titulo', 'inicio', 'fim'
     """
-    try:
-        # Validate event data
-        required_fields = ['titulo', 'inicio', 'fim']
-        missing_fields = [field for field in required_fields if not ev.get(field)]
-        if missing_fields:
-            raise ValueError(f"Event missing required fields: {missing_fields}")
-        
-        body = {
-            'summary': ev['titulo'],
-            'start': {'dateTime': ev['inicio'], 'timeZone': TIMEZONE},
-            'end': {'dateTime': ev['fim'], 'timeZone': TIMEZONE},
-        }
-        
+    # Validate event data
+    required_fields = ['titulo', 'inicio', 'fim']
+    missing_fields = [field for field in required_fields if not ev.get(field)]
+    if missing_fields:
+        logger.error(f"Invalid event data (missing fields: {missing_fields})")
+        raise ValueError(f"Event missing required fields: {missing_fields}")
+
+    body = {
+        'summary': ev['titulo'],
+        'start': {'dateTime': ev['inicio'], 'timeZone': TIMEZONE},
+        'end': {'dateTime': ev['fim'], 'timeZone': TIMEZONE},
+    }
+
+    if LOG_MASK_TITLES:
+        logger.debug("Creating event")
+    else:
         logger.debug(f"Creating event: {ev['titulo']}")
+
+    try:
         def _insert_call():
             return svc.events().insert(calendarId=CALENDAR_ID, body=body).execute()
         result = _retry(_insert_call, op_name="events.insert")
-        
         event_id = result.get('id', 'unknown')
-        logger.info(f"Created event in Google Calendar: {ev['titulo']} (ID: {event_id[:8]}...)")
-        
+        if LOG_MASK_TITLES:
+            logger.info(f"Created event in Google Calendar (ID: {event_id[:8]}...)")
+        else:
+            logger.info(f"Created event in Google Calendar: {ev['titulo']} (ID: {event_id[:8]}...)")
     except HttpError as e:
-        logger.error(f"Google Calendar API error creating event '{ev.get('titulo', 'unknown')}': {e}")
+        if LOG_MASK_TITLES:
+            logger.error(f"Google Calendar API error creating event: {e}")
+        else:
+            logger.error(f"Google Calendar API error creating event '{ev.get('titulo', 'unknown')}': {e}")
         if e.resp.status == 403:
             logger.error("Permission denied. Check if the service account can create events")
         elif e.resp.status == 404:
             logger.error("Calendar not found. Check your GOOGLE_CALENDAR_ID configuration")
-        raise
-    except ValueError as e:
-        logger.error(f"Invalid event data: {e}")
         raise
     except Exception as e:
         logger.error(f"Unexpected error creating event: {e}")
@@ -221,32 +221,52 @@ def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_e
     Raises:
         Exception: Only if critical error occurs
     """
-    try:
-        if not event_id:
+    if not event_id:
+        if LOG_MASK_TITLES:
+            logger.warning("Cannot delete event: missing event ID")
+        else:
             logger.warning(f"Cannot delete event '{event_title}': missing event ID")
-            return False
-        
-        event_id_partial = event_id[:8] if len(event_id) > 8 else event_id
+        return False
+
+    event_id_partial = event_id[:8] if len(event_id) > 8 else event_id
+    if LOG_MASK_TITLES:
+        logger.debug(f"Deleting event (ID: {event_id_partial}...)")
+    else:
         logger.debug(f"Deleting event: {event_title} (ID: {event_id_partial}...)")
+
+    try:
         def _delete_call():
             return svc.events().delete(
                 calendarId=CALENDAR_ID,
                 eventId=event_id
             ).execute()
         _retry(_delete_call, op_name="events.delete")
-        
-        logger.info(f"Deleted event from Google Calendar: {event_title}")
+        if LOG_MASK_TITLES:
+            logger.info("Deleted event from Google Calendar")
+        else:
+            logger.info(f"Deleted event from Google Calendar: {event_title}")
         return True
-        
     except HttpError as e:
         if e.resp.status == 404:
-            logger.warning(f"Event '{event_title}' not found (already deleted?)")
-            return True  # Consider it successful if already gone
-        elif e.resp.status == 403:
-            logger.error(f"Permission denied deleting event '{event_title}'")
+            if LOG_MASK_TITLES:
+                logger.warning("Event not found (already deleted?)")
+            else:
+                logger.warning(f"Event '{event_title}' not found (already deleted?)")
+            return True
+        if e.resp.status == 403:
+            if LOG_MASK_TITLES:
+                logger.error("Permission denied deleting event")
+            else:
+                logger.error(f"Permission denied deleting event '{event_title}'")
         else:
-            logger.error(f"Google Calendar API error deleting event '{event_title}': {e}")
+            if LOG_MASK_TITLES:
+                logger.error(f"Google Calendar API error deleting event: {e}")
+            else:
+                logger.error(f"Google Calendar API error deleting event '{event_title}': {e}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error deleting event '{event_title}': {e}")
+        if LOG_MASK_TITLES:
+            logger.error(f"Unexpected error deleting event: {e}")
+        else:
+            logger.error(f"Unexpected error deleting event '{event_title}': {e}")
         return False

@@ -19,7 +19,7 @@ from src.config import (
     GOOGLE_SERVICE_ACCOUNT_KEY,
     CALENDAR_ID,
     CANCEL_PREFIX,
-    mask_title,
+    LOG_MASK_TITLES,
 )
 
 # Set timezone
@@ -110,9 +110,15 @@ def main():
                 g_ev['inicio'],
                 g_ev['fim']
             )
-            logger.info(f"Deleted event due to cancel prefix: {mask_title(original_title)} ({original_start} - {original_end})")
+            if LOG_MASK_TITLES:
+                logger.info(f"Deleted event due to cancel prefix: ({original_start} - {original_end})")
+            else:
+                logger.info(f"Deleted event due to cancel prefix: {original_title} ({original_start} - {original_end})")
         else:
-            logger.info(f"No matching event found in Google Calendar for cancel prefix {mask_title(original_title)}")
+            if LOG_MASK_TITLES:
+                logger.info("No matching event found in Google Calendar for cancel prefix")
+            else:
+                logger.info(f"No matching event found in Google Calendar for cancel prefix {original_title}")
 
     # 5. Teams → Google Calendar: create only events not present in Google Calendar
     logger.info("4. Creating events missing in Google Calendar...")
@@ -123,7 +129,10 @@ def main():
                 'inicio': to_local(parse_datetime(ev['inicio'])).replace(tzinfo=None, microsecond=0).isoformat(sep='T'),
                 'fim': to_local(parse_datetime(ev['fim'])).replace(tzinfo=None, microsecond=0).isoformat(sep='T')
             })
-            logger.info(f"Created event in Google Calendar: {mask_title(ev['titulo'])} ({ev['inicio']} - {ev['fim']})")
+            if LOG_MASK_TITLES:
+                logger.info(f"Created event in Google Calendar: ({ev['inicio']} - {ev['fim']})")
+            else:
+                logger.info(f"Created event in Google Calendar: {ev['titulo']} ({ev['inicio']} - {ev['fim']})")
     if not any(key not in google_dict for key in teams_dict):
         logger.info("No new events to create in Google Calendar.")
 
@@ -138,7 +147,10 @@ def main():
                 g_ev['inicio'],
                 g_ev['fim']
             )
-            logger.info(f"Deleted event from Google Calendar: {mask_title(g_ev['titulo'])} ({g_ev['inicio']} - {g_ev['fim']})")
+            if LOG_MASK_TITLES:
+                logger.info(f"Deleted event from Google Calendar: ({g_ev['inicio']} - {g_ev['fim']})")
+            else:
+                logger.info(f"Deleted event from Google Calendar: {g_ev['titulo']} ({g_ev['inicio']} - {g_ev['fim']})")
     if not any(key not in teams_dict for key in google_dict):
         logger.info("No events to delete from Google Calendar.")
 

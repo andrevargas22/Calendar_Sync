@@ -36,4 +36,6 @@ jobs:
           pip install --require-hashes --no-deps -r requirements.txt || pip install -r requirements.txt
 
       - name: Run sync script
+        env:
+          LOG_MASK_TITLES: "1"
         run: python calendar_sync.py
