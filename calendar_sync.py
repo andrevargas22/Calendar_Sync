@@ -94,8 +94,14 @@ def main():
     for ev in google_events:
         google_dict[normalize_event(ev, 'google')] = ev
 
-    # 4. Handle canceled events
-    logger.info("4. Handling canceled events from Teams...")
+    # Counters for summary (privacy friendly)
+    created_count = 0
+    deleted_count = 0
+    canceled_deleted_count = 0
+    missing_cancel_matches = 0
+
+    # 4. Handle canceled events (no detailed timestamps in logs)
+    logger.info("4. Handling canceled events from Teams (privacy masked)...")
     for cancel_ev in cancelado_events:
         original_title = cancel_ev['titulo'].replace(CANCEL_PREFIX, "").strip()
         original_start = to_local(parse_datetime(cancel_ev['inicio'])).replace(tzinfo=None, microsecond=0)
@@ -110,18 +116,17 @@ def main():
                 g_ev['inicio'],
                 g_ev['fim']
             )
-            if LOG_MASK_TITLES:
-                logger.info(f"Deleted event due to cancel prefix: ({original_start} - {original_end})")
-            else:
-                logger.info(f"Deleted event due to cancel prefix: {original_title} ({original_start} - {original_end})")
+            canceled_deleted_count += 1
         else:
-            if LOG_MASK_TITLES:
-                logger.info("No matching event found in Google Calendar for cancel prefix")
-            else:
-                logger.info(f"No matching event found in Google Calendar for cancel prefix {original_title}")
+            missing_cancel_matches += 1
+
+    if canceled_deleted_count:
+        logger.info(f"Canceled events removed: {canceled_deleted_count}")
+    if missing_cancel_matches:
+        logger.info(f"Canceled events without Google match: {missing_cancel_matches}")
 
     # 5. Teams → Google Calendar: create only events not present in Google Calendar
-    logger.info("4. Creating events missing in Google Calendar...")
+    logger.info("5. Creating missing events in Google Calendar (privacy masked)...")
     for key, ev in teams_dict.items():
         if key not in google_dict:
             criar_evento_google(svc, {
@@ -129,15 +134,15 @@ def main():
                 'inicio': to_local(parse_datetime(ev['inicio'])).replace(tzinfo=None, microsecond=0).isoformat(sep='T'),
                 'fim': to_local(parse_datetime(ev['fim'])).replace(tzinfo=None, microsecond=0).isoformat(sep='T')
             })
-            if LOG_MASK_TITLES:
-                logger.info(f"Created event in Google Calendar: ({ev['inicio']} - {ev['fim']})")
-            else:
-                logger.info(f"Created event in Google Calendar: {ev['titulo']} ({ev['inicio']} - {ev['fim']})")
-    if not any(key not in google_dict for key in teams_dict):
-        logger.info("No new events to create in Google Calendar.")
+            created_count += 1
+
+    if created_count == 0:
+        logger.info("No new events created.")
+    else:
+        logger.info(f"Events created: {created_count}")
 
     # 6. Google Calendar → Teams: delete only events not present in Teams
-    logger.info("5. Deleting events from Google Calendar not present in Teams...")
+    logger.info("6. Deleting orphan Google events (privacy masked)...")
     for key, g_ev in google_dict.items():
         if key not in teams_dict:
             remover_evento_google_by_id(
@@ -147,13 +152,17 @@ def main():
                 g_ev['inicio'],
                 g_ev['fim']
             )
-            if LOG_MASK_TITLES:
-                logger.info(f"Deleted event from Google Calendar: ({g_ev['inicio']} - {g_ev['fim']})")
-            else:
-                logger.info(f"Deleted event from Google Calendar: {g_ev['titulo']} ({g_ev['inicio']} - {g_ev['fim']})")
-    if not any(key not in teams_dict for key in google_dict):
-        logger.info("No events to delete from Google Calendar.")
+            deleted_count += 1
 
+    if deleted_count == 0:
+        logger.info("No orphan events deleted.")
+    else:
+        logger.info(f"Orphan events deleted: {deleted_count}")
+
+    # Final summary
+    logger.info("Sync summary (privacy masked): "
+                f"created={created_count} deleted={deleted_count} canceled_removed={canceled_deleted_count} "
+                f"cancel_no_match={missing_cancel_matches}")
     logger.info("Calendar Sync Process Completed")
 
 if __name__ == '__main__':

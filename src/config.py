@@ -20,7 +20,7 @@ TIMEZONE = 'America/Sao_Paulo'
 
 # Behavior / security related
 CANCEL_PREFIX = os.environ.get('CANCEL_PREFIX', 'Cancelado:')
-LOG_MASK_TITLES = _get_bool('LOG_MASK_TITLES', False)
+LOG_MASK_TITLES = _get_bool('LOG_MASK_TITLES', True)
 
 def mask_title(title: str) -> str:
 	"""Return masked or original title based on LOG_MASK_TITLES flag."""
