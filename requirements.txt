@@ -4,3 +4,4 @@ recurring-ical-events==3.6.1
 google-api-python-client==2.167.0
 google-auth-httplib2==0.2.0 
 pytz==2025.2
+packaging==24.1
