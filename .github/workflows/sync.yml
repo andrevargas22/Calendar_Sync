@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 10 * * 1-5' # 7h BRT
     - cron: '0 15 * * 1-5' # 12h BRT
+  workflow_dispatch:
 
 env:
   TEAMS_ICS_URL: ${{ secrets.TEAMS_ICS_URL }}
