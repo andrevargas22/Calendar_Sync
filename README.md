@@ -13,5 +13,11 @@ Synchronizes Microsoft Teams calendar events (via ICS) with Google Calendar, ens
 - `calendar_sync.py`: Main script
 - `src/`: Helper functions and API integrations
 
+## GitHub Actions Workflows
+- **sync.yml**: Runs the calendar sync twice daily (Mon-Fri)
+- **keep-alive.yml**: Maintains repository activity every 30 days and cleans old workflow runs
+  - GitHub Actions disables workflows after 60 days of repository inactivity
+  - This workflow makes periodic commits to prevent deactivation
+
 ---
 Personal project for personal use.

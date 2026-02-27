@@ -1,0 +1,37 @@
+name: Repository Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Keep repository active
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git commit --allow-empty -m "chore: keep repository active [skip ci]"
+          git push
+
+      - name: Clean old workflow runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Cleaning old workflow runs..."
+          gh run list --repo ${{ github.repository }} --limit 100 --json databaseId --jq '.[].databaseId' | \
+            xargs -I {} gh run delete {} --repo ${{ github.repository }} || echo "No workflows to delete"
+          echo "Cleanup completed!"
