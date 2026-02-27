@@ -24,8 +24,10 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+          
+          git checkout -B keep-alive
           git commit --allow-empty -m "chore: keep repository active [skip ci]"
-          git push
+          git push origin keep-alive --force
 
       - name: Clean old workflow runs
         env:
