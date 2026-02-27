@@ -33,7 +33,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Cleaning old workflow runs..."
-          gh run list --repo ${{ github.repository }} --limit 100 --json databaseId --jq '.[].databaseId' | \
-            xargs -I {} gh run delete {} --repo ${{ github.repository }} || echo "No workflows to delete"
+          echo "Cleaning old completed workflow runs..."
+          gh run list --repo ${{ github.repository }} --limit 100 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId' | \
+            xargs -I {} gh run delete {} --repo ${{ github.repository }} || echo "No completed workflows to delete"
           echo "Cleanup completed!"
