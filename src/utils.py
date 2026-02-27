@@ -1,8 +1,9 @@
 """Utility functions for the calendar sync application."""
 from datetime import datetime, timedelta
+from typing import Union
 from src.logger import logger
 
-def parse_datetime(dtstr):
+def parse_datetime(dtstr: Union[str, datetime]) -> datetime:
     """
     Improved parsing of datetime strings to ensure consistent format.
     
@@ -33,12 +34,12 @@ def parse_datetime(dtstr):
     
     return dt.replace(microsecond=0)
 
-def get_sync_period():
+def get_sync_period() -> tuple[datetime, datetime]:
     """
     Calculate the current sync period (current week + a few days).
     
     Returns:
-        tuple: (start_date, end_date) for the sync period
+        Tuple of (start_date, end_date) for the sync period
     """
     from src.config import START_HOUR, END_HOUR, DAYS_RANGE
     

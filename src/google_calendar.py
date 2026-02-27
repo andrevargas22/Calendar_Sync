@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import json
 import time
 import random
+from typing import Any, Callable, Optional
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -14,7 +15,7 @@ from src.logger import logger
 from src.config import SCOPES, CALENDAR_ID, GOOGLE_SERVICE_ACCOUNT_KEY, TIMEZONE, LOG_MASK_TITLES, mask_title
     
     
-def get_calendar_service():
+def get_calendar_service() -> Any:
     """
     Initialize the Calendar API using Service Account.
     
@@ -56,7 +57,7 @@ def get_calendar_service():
     except Exception as e:
         logger.error(f"Unexpected error during authentication: {e}")
 
-def _retry(callable_fn, *, max_attempts=4, base_delay=0.5, op_name="api_call"):
+def _retry(callable_fn: Callable, *, max_attempts: int = 4, base_delay: float = 0.5, op_name: str = "api_call") -> Any:
     """Simple exponential backoff retry for transient Google API errors."""
     attempt = 0
     while True:
@@ -80,7 +81,7 @@ def _retry(callable_fn, *, max_attempts=4, base_delay=0.5, op_name="api_call"):
                 continue
             raise
 
-def get_google_events(svc, start, end):
+def get_google_events(svc: Any, start: datetime, end: datetime) -> list[dict]:
     """
     Fetch events from Google Calendar in the given period.
     
@@ -133,9 +134,9 @@ def get_google_events(svc, start, end):
                     
                 out.append({
                     'id': ev.get('id'),
-                    'titulo': ev.get('summary', 'Untitled Event'),
-                    'inicio': s,
-                    'fim': f
+                    'title': ev.get('summary', 'Untitled Event'),
+                    'start': s,
+                    'end': f
                 })
             except Exception as e:
                 event_id_partial = ev.get('id', 'unknown')[:8] if ev.get('id') else 'unknown'
@@ -156,30 +157,30 @@ def get_google_events(svc, start, end):
         logger.error(f"Unexpected error fetching events: {e}")
         raise
 
-def criar_evento_google(svc, ev):
+def create_google_event(svc: Any, ev: dict[str, str]) -> None:
     """Create an event in Google Calendar.
 
     Args:
         svc: Google Calendar API service
-        ev: dict with keys 'titulo', 'inicio', 'fim'
+        ev: dict with keys 'title', 'start', 'end'
     """
     # Validate event data
-    required_fields = ['titulo', 'inicio', 'fim']
+    required_fields = ['title', 'start', 'end']
     missing_fields = [field for field in required_fields if not ev.get(field)]
     if missing_fields:
         logger.error(f"Invalid event data (missing fields: {missing_fields})")
         raise ValueError(f"Event missing required fields: {missing_fields}")
 
     body = {
-        'summary': ev['titulo'],
-        'start': {'dateTime': ev['inicio'], 'timeZone': TIMEZONE},
-        'end': {'dateTime': ev['fim'], 'timeZone': TIMEZONE},
+        'summary': ev['title'],
+        'start': {'dateTime': ev['start'], 'timeZone': TIMEZONE},
+        'end': {'dateTime': ev['end'], 'timeZone': TIMEZONE},
     }
 
     if LOG_MASK_TITLES:
         logger.debug("Creating event")
     else:
-        logger.debug(f"Creating event: {ev['titulo']}")
+        logger.debug(f"Creating event: {ev['title']}")
 
     try:
         def _insert_call():
@@ -189,12 +190,12 @@ def criar_evento_google(svc, ev):
         if LOG_MASK_TITLES:
             logger.info(f"Created event in Google Calendar (ID: {event_id[:8]}...)")
         else:
-            logger.info(f"Created event in Google Calendar: {ev['titulo']} (ID: {event_id[:8]}...)")
+            logger.info(f"Created event in Google Calendar: {ev['title']} (ID: {event_id[:8]}...)")
     except HttpError as e:
         if LOG_MASK_TITLES:
             logger.error(f"Google Calendar API error creating event: {e}")
         else:
-            logger.error(f"Google Calendar API error creating event '{ev.get('titulo', 'unknown')}': {e}")
+            logger.error(f"Google Calendar API error creating event '{ev.get('title', 'unknown')}': {e}")
         if e.resp.status == 403:
             logger.error("Permission denied. Check if the service account can create events")
         elif e.resp.status == 404:
@@ -204,7 +205,8 @@ def criar_evento_google(svc, ev):
         logger.error(f"Unexpected error creating event: {e}")
         raise
 
-def remover_evento_google_by_id(svc, event_id, event_title, event_start, event_end):
+def delete_google_event_by_id(svc: Any, event_id: Optional[str], event_title: str, 
+                                event_start: Any, event_end: Any) -> bool:
     """
     Remove an event from Google Calendar by ID with improved error handling.
     

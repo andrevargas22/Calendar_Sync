@@ -3,16 +3,17 @@ Logger configuration for the calendar synchronization application.
 """
 import logging
 import os
+from typing import Optional
 
-def setup_logging(logger_name='calendar_sync'):
+def setup_logging(logger_name: str = 'calendar_sync') -> logging.Logger:
     """
-    Configure and return a logger with console handler only
+    Configure and return a logger with console handler only.
     
     Args:
         logger_name: Name of the logger
         
     Returns:
-        configured logger instance
+        Configured logger instance
     """
     # Create logger
     logger = logging.getLogger(logger_name)
@@ -20,6 +21,9 @@ def setup_logging(logger_name='calendar_sync'):
     # If handlers already exist, return existing logger to avoid duplicate logs
     if logger.handlers:
         return logger
+    
+    # Prevent propagation to root logger to avoid duplicate logs
+    logger.propagate = False
     
     # Set log level from environment variable or default to INFO
     log_level = os.environ.get('LOG_LEVEL', 'INFO')

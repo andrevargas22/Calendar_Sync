@@ -4,6 +4,7 @@ Microsoft Teams calendar functions.
 
 import requests
 from datetime import datetime
+from typing import Optional
 from icalendar import Calendar as ICALCalendar
 import recurring_ical_events
 
@@ -11,7 +12,7 @@ from src.logger import logger
 from src.config import TEAMS_ICS_URL
 from src.utils import get_sync_period
 
-def get_teams_events():
+def get_teams_events() -> tuple[Optional[list[dict]], Optional[datetime], Optional[datetime]]:
     """
     Fetch events from Teams calendar for current and next week.
     
@@ -32,6 +33,18 @@ def get_teams_events():
         # Add timeout and proper headers
         headers = {'User-Agent': 'Mozilla/5.0 (compatible; Calendar-Client)'}
         resp = requests.get(TEAMS_ICS_URL, timeout=30, headers=headers)
+        
+        # Handle specific HTTP status codes
+        if resp.status_code == 401:
+            logger.error("Authentication failed: Check Teams ICS URL credentials")
+            return None, None, None
+        elif resp.status_code == 403:
+            logger.error("Access forbidden: Check Teams calendar sharing permissions")
+            return None, None, None
+        elif resp.status_code == 404:
+            logger.error("Calendar not found: Check Teams ICS URL")
+            return None, None, None
+        
         resp.raise_for_status()
         
         logger.info("Successfully fetched Teams calendar data")
@@ -56,10 +69,15 @@ def get_teams_events():
                     
                 event_title = str(e.get('SUMMARY', 'Untitled Event'))
                 
+                # Validate event has valid duration (no zero-duration events)
+                if s >= f:
+                    logger.warning(f"Skipping event with invalid duration: start={s} end={f}")
+                    continue
+                
                 out.append({
-                    'titulo': event_title,
-                    'inicio': s.replace(tzinfo=None),
-                    'fim': f.replace(tzinfo=None)
+                    'title': event_title,
+                    'start': s.replace(tzinfo=None),
+                    'end': f.replace(tzinfo=None)
                 })
             except Exception as e_err:
                 logger.warning(f"Error processing individual event: {e_err}")
