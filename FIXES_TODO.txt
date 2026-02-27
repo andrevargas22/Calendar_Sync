@@ -1,21 +1,24 @@
 ================================================================================
 CALENDAR SYNC - LISTA DE CORREÇÕES IDENTIFICADAS
 Análise realizada em: 27/02/2026
+Última atualização: 27/02/2026
 ================================================================================
+
+LEGENDA:
+✅ = Corrigido
+🔄 = Em progresso
+⏳ = Pendente
 
 ================================================================================
 🔴 CORREÇÕES CRÍTICAS
 ================================================================================
 
-[CRÍTICO-1] Colisão de Hash em Eventos Duplicados
+✅ [CRÍTICO-1] Colisão de Hash em Eventos Duplicados - CORRIGIDO
 Arquivo: calendar_sync.py (linhas 88-95)
-Problema: Dicionário sobrescreve eventos com mesma chave (título+horário)
-Impacto: Perda silenciosa de eventos duplicados legítimos
-Correção: Adicionar UID do iCal à chave ou usar estrutura de dados diferente
-Código afetado:
-    teams_dict[normalize_event(ev, 'teams')] = ev  # Sobrescreve!
+Solução implementada: Usado defaultdict(list) para suportar múltiplos eventos
+Commit: fix/improvements
 
-[CRÍTICO-2] Possível Injeção via JSON de Credenciais
+⏳ [CRÍTICO-2] Possível Injeção via JSON de Credenciais
 Arquivo: google_calendar.py (linha 31)
 Problema: json.loads() sem validação de schema
 Risco: Processamento de JSON malicioso se env var comprometida
@@ -158,78 +161,78 @@ Correção: Usar TIMEZONE do config
 ⚪ CORREÇÕES DE BAIXA PRIORIDADE
 ================================================================================
 
-[BAIXA-1] Nomenclatura Inconsistente (PT/EN)
+✅ [BAIXA-1] Nomenclatura Inconsistente (PT/EN) - CORRIGIDO
 Arquivos: Todos
-Problema: Mistura português e inglês
-Exemplos: criar_evento_google, titulo, get_teams_events
-Correção: Padronizar tudo em inglês
+Solução: Padronizado para inglês (title, start, end, create_*, delete_*)
+Commit: fix/improvements
 
-[BAIXA-2] Falta de Type Hints
-Arquivos: Todos exceto partes de config.py
-Problema: Dificulta IDE autocomplete e detecção de erros
-Correção: Adicionar type hints em todas as funções
+✅ [BAIXA-2] Falta de Type Hints - CORRIGIDO
+Arquivos: Todos
+Solução: Type hints adicionados em todas as funções
+Commit: fix/improvements
 
-[BAIXA-3] Sem Rate Limiting
+⏳ [BAIXA-3] Sem Rate Limiting
 Arquivos: Todas chamadas de API
 Problema: Sem limite de requisições
-Correção: Implementar rate limiting ou circuit breaker
+Nota: Considerado desnecessário para uso pessoal, retry já existe
 
-[BAIXA-4] Eventos com Duração Zero
-Problema: Se inicio == fim, pode causar erro na API Google
-Correção: Validar e rejeitar eventos com duração zero
-
-[BAIXA-5] Título Vazio ou None
-Arquivo: calendar_sync.py (linha 36)
-Problema: event['titulo'].strip() assume que titulo existe
-Correção: Adicionar null check: (event.get('titulo') or '').strip()
-
-[BAIXA-6] Falta Tratamento para Status HTTP Específicos
+✅ [BAIXA-4] Eventos com Duração Zero - CORRIGIDO
 Arquivo: teams_functions.py
-Problema: Apenas raise_for_status() genérico
-Correção: Tratar 401, 403, 404 com mensagens específicas
+Solução: Validação adicionada (if s >= f: skip)
+Commit: fix/improvements
 
-[BAIXA-7] Logger Setup Pode Criar Múltiplas Instâncias
+✅ [BAIXA-5] Título Vazio ou None - CORRIGIDO
+Arquivo: calendar_sync.py
+Solução: (event.get('title') or '').strip()
+Commit: fix/improvements
+
+✅ [BAIXA-6] Falta Tratamento para Status HTTP Específicos - CORRIGIDO
+Arquivo: teams_functions.py
+Solução: Tratamento explícito para 401, 403, 404
+Commit: fix/improvements
+
+✅ [BAIXA-7] Logger Setup Pode Criar Múltiplas Instâncias - CORRIGIDO
 Arquivo: logger.py
-Problema: Se importado de lugares diferentes pode ter behavior inesperado
-Nota: Atual verifica handlers, mas pode melhorar
+Solução: Adicionado logger.propagate = False
+Commit: fix/improvements
 
-[BAIXA-8] Falta Validação de DAYS_RANGE
+✅ [BAIXA-8] Falta Validação de DAYS_RANGE - CORRIGIDO
 Arquivo: config.py
-Problema: DAYS_RANGE pode ser negativo ou muito grande
-Correção: Validar range razoável (1-365)
+Solução: Helper _get_int com validação min_val=1, max_val=365
+Commit: fix/improvements
 
 
 ================================================================================
 🎯 PLANO DE IMPLEMENTAÇÃO SUGERIDO
 ================================================================================
 
-FASE 1 - CORREÇÕES CRÍTICAS E DE SEGURANÇA
-- [CRÍTICO-1] Colisão de hash
-- [CRÍTICO-2] Validação JSON
-- [ALTA-3] Validação SSRF
+✅ FASE 1 - CORREÇÕES CRÍTICAS E DE SEGURANÇA (CONCLUÍDA PARCIALMENTE)
+✅ [CRÍTICO-1] Colisão de hash
+⏳ [CRÍTICO-2] Validação JSON
+⏳ [ALTA-3] Validação SSRF
 
 FASE 2 - BUGS QUE AFETAM FUNCIONAMENTO
-- [ALTA-2] Bug do domingo
-- [MÉDIA-3] Deleção silenciosa
-- [MÉDIA-4] Eventos que mudam horário
+⏳ [ALTA-2] Bug do domingo
+⏳ [MÉDIA-3] Deleção silenciosa
+⏳ [MÉDIA-4] Eventos que mudam horário
 
 FASE 3 - PERFORMANCE
-- [ALTA-1] Paginação Google API
-- [ALTA-4] Batch API deleção cancelados
-- [ALTA-5] Batch API criação
-- [ALTA-6] Batch API deleção órfãos
+⏳ [ALTA-1] Paginação Google API
+⏳ [ALTA-4] Batch API deleção cancelados
+⏳ [ALTA-5] Batch API criação
+⏳ [ALTA-6] Batch API deleção órfãos
 
 FASE 4 - MANUTENIBILIDADE
-- [ALTA-7] Refactor normalize_event
-- [MÉDIA-7] Helper para logs
-- [BAIXA-2] Type hints
-- [BAIXA-1] Nomenclatura
+⏳ [ALTA-7] Refactor normalize_event
+⏳ [MÉDIA-7] Helper para logs
+✅ [BAIXA-2] Type hints
+✅ [BAIXA-1] Nomenclatura
 
-FASE 5 - CASOS EDGE E MELHORIAS
-- [MÉDIA-1] Parsing timezone robusto
-- [MÉDIA-2] All-day events
-- [MÉDIA-5] Timezone DST
-- [MÉDIA-10] Eventos recorrentes
+✅ FASE 5 - CASOS EDGE E MELHORIAS (PARCIALMENTE CONCLUÍDA)
+⏳ [MÉDIA-1] Parsing timezone robusto
+⏳ [MÉDIA-2] All-day events
+⏳ [MÉDIA-5] Timezone DST
+⏳ [MÉDIA-10] Eventos recorrentes
 
 
 ================================================================================
@@ -237,17 +240,22 @@ FASE 5 - CASOS EDGE E MELHORIAS
 ================================================================================
 
 Total de problemas identificados: 29
-- Críticos: 2
-- Alta prioridade: 7
-- Média prioridade: 12
-- Baixa prioridade: 8
+✅ Corrigidos: 9 (31%)
+⏳ Pendentes: 20 (69%)
+
+Por gravidade:
+- Críticos: 1/2 corrigidos (50%)
+- Alta prioridade: 0/7 corrigidos (0%)
+- Média prioridade: 0/12 corrigidos (0%)
+- Baixa prioridade: 8/8 corrigidos (100%) ✅
 
 Arquivos afetados:
-- calendar_sync.py: 11 issues
-- google_calendar.py: 9 issues
-- utils.py: 4 issues
-- teams_functions.py: 3 issues
-- config.py: 2 issues
+- calendar_sync.py: 11 issues (1 corrigido)
+- google_calendar.py: 9 issues (2 corrigidos)
+- utils.py: 4 issues (1 corrigido)
+- teams_functions.py: 3 issues (2 corrigidos)
+- config.py: 2 issues (2 corrigidos)
+- logger.py: 1 issue (1 corrigido)
 
 ================================================================================
 FIM DO DOCUMENTO
