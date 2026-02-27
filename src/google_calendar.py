@@ -164,15 +164,18 @@ def create_google_event(svc: Any, ev: dict[str, str]) -> None:
         svc: Google Calendar API service
         ev: dict with keys 'title', 'start', 'end'
     """
-    # Validate event data
+    # Validate event data - allow empty strings but not None or missing fields
     required_fields = ['title', 'start', 'end']
-    missing_fields = [field for field in required_fields if not ev.get(field)]
+    missing_fields = [field for field in required_fields if field not in ev]
     if missing_fields:
         logger.error(f"Invalid event data (missing fields: {missing_fields})")
         raise ValueError(f"Event missing required fields: {missing_fields}")
 
+    # Use fallback title if empty
+    event_title = ev['title'] or 'Untitled Event'
+    
     body = {
-        'summary': ev['title'],
+        'summary': event_title,
         'start': {'dateTime': ev['start'], 'timeZone': TIMEZONE},
         'end': {'dateTime': ev['end'], 'timeZone': TIMEZONE},
     }
@@ -180,7 +183,7 @@ def create_google_event(svc: Any, ev: dict[str, str]) -> None:
     if LOG_MASK_TITLES:
         logger.debug("Creating event")
     else:
-        logger.debug(f"Creating event: {ev['title']}")
+        logger.debug(f"Creating event: {event_title}")
 
     try:
         def _insert_call():
@@ -190,12 +193,12 @@ def create_google_event(svc: Any, ev: dict[str, str]) -> None:
         if LOG_MASK_TITLES:
             logger.info(f"Created event in Google Calendar (ID: {event_id[:8]}...)")
         else:
-            logger.info(f"Created event in Google Calendar: {ev['title']} (ID: {event_id[:8]}...)")
+            logger.info(f"Created event in Google Calendar: {event_title} (ID: {event_id[:8]}...)")
     except HttpError as e:
         if LOG_MASK_TITLES:
             logger.error(f"Google Calendar API error creating event: {e}")
         else:
-            logger.error(f"Google Calendar API error creating event '{ev.get('title', 'unknown')}': {e}")
+            logger.error(f"Google Calendar API error creating event '{event_title}': {e}")
         if e.resp.status == 403:
             logger.error("Permission denied. Check if the service account can create events")
         elif e.resp.status == 404:
