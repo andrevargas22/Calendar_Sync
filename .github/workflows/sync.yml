@@ -11,9 +11,6 @@ env:
   GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
   GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
 
-permissions:
-  contents: write
-
 jobs:
   sync-calendar:
     runs-on: ubuntu-latest
@@ -40,13 +37,3 @@ jobs:
           LOG_MASK_TITLES: "1"
           CANCEL_PREFIX: "Canceled: "
         run: python calendar_sync.py
-
-      - name: Keep repository active (weekly, Mondays only)
-        if: github.event_name == 'schedule'
-        run: |
-          if [ "$(date +%u)" = "1" ]; then
-            git config --local user.email "github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git commit --allow-empty -m "chore: keep repository active [skip ci]"
-            git push
-          fi
