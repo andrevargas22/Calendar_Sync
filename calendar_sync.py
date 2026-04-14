@@ -19,6 +19,7 @@ from src.config import (
     GOOGLE_SERVICE_ACCOUNT_KEY,
     CALENDAR_ID,
     CANCEL_PREFIX,
+    CANCEL_PREFIXES,
     LOG_MASK_TITLES,
 )
 
@@ -42,6 +43,13 @@ def normalize_event(event, source):
         end = to_local(end_raw).replace(tzinfo=None, microsecond=0)
     logger.debug(f"NORMALIZE({source}): processing event - raw_start={start_raw} raw_end={end_raw} norm_start={start} norm_end={end}")
     return (title, start.isoformat(sep='T'), end.isoformat(sep='T'))
+
+
+def is_canceled_title(title):
+    if not title:
+        return False
+    normalized_title = title.strip().lower()
+    return any(normalized_title.startswith(prefix.lower()) for prefix in CANCEL_PREFIXES)
 
 def main():
     logger.info("Calendar Sync Process Starting")
@@ -85,7 +93,7 @@ def main():
     cancelado_events = []
     for ev in teams_events:
         titulo = ev.get('titulo') or ''
-        if titulo.startswith(CANCEL_PREFIX):
+        if is_canceled_title(titulo):
             cancelado_events.append(ev)
         else:
             teams_dict[normalize_event(ev, 'teams')] = ev

@@ -20,6 +20,12 @@ TIMEZONE = 'America/Sao_Paulo'
 
 # Behavior / security related
 CANCEL_PREFIX = os.environ.get('CANCEL_PREFIX', 'Cancelado:')
+CANCEL_PREFIXES = tuple(
+	p.strip() for p in os.environ.get(
+		'CANCEL_PREFIXES',
+		f"{CANCEL_PREFIX},Canceled event:,Cancelled event:,Canceled:,Cancelled:"
+	).split(',') if p.strip()
+)
 LOG_MASK_TITLES = _get_bool('LOG_MASK_TITLES', True)
 
 def mask_title(title: str) -> str:
