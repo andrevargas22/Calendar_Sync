@@ -3,6 +3,7 @@ Calendar Sync - Synchronizes Microsoft Teams calendar with Google Calendar.
 """
 
 import sys
+from datetime import timedelta
 import pytz
 
 from src.logger import logger
@@ -21,6 +22,7 @@ from src.config import (
     CANCEL_PREFIX,
     CANCEL_PREFIXES,
     LOG_MASK_TITLES,
+    LOOKBACK_DAYS,
 )
 
 # Set timezone
@@ -126,6 +128,7 @@ def main():
                 g_ev['fim']
             )
             canceled_deleted_count += 1
+            google_dict.pop(key, None)  # prevent step 6 from trying to delete the same event
         else:
             missing_cancel_matches += 1
 
@@ -133,6 +136,26 @@ def main():
         logger.info(f"Canceled events removed: {canceled_deleted_count}")
     if missing_cancel_matches:
         logger.info(f"Canceled events without Google match: {missing_cancel_matches}")
+
+    # 4.5 Cleanup stale canceled events in Google outside the current sync window
+    logger.info("4.5. Cleaning up stale canceled events in Google (lookback window)...")
+    lookback_start = start - timedelta(days=LOOKBACK_DAYS)
+    past_google_events = get_google_events(svc, lookback_start, start)
+    stale_canceled_count = 0
+    for ev in past_google_events:
+        if is_canceled_title(ev.get('titulo', '')):
+            remover_evento_google_by_id(
+                svc,
+                ev.get('id', None),
+                ev['titulo'],
+                ev['inicio'],
+                ev['fim']
+            )
+            stale_canceled_count += 1
+    if stale_canceled_count:
+        logger.info(f"Stale canceled events removed (lookback): {stale_canceled_count}")
+    else:
+        logger.info("No stale canceled events found in lookback window.")
 
     # 5. Teams → Google Calendar: create only events not present in Google Calendar
     logger.info("5. Creating missing events in Google Calendar (privacy masked)...")
