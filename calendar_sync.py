@@ -103,10 +103,11 @@ def main():
     # 4. Handle canceled events (no detailed timestamps in logs)
     logger.info("4. Handling canceled events from Teams (privacy masked)...")
     for cancel_ev in cancelado_events:
-        original_title = cancel_ev['titulo'].replace(CANCEL_PREFIX, "").strip()
-        original_start = to_local(parse_datetime(cancel_ev['inicio'])).replace(tzinfo=None, microsecond=0)
-        original_end = to_local(parse_datetime(cancel_ev['fim'])).replace(tzinfo=None, microsecond=0)
-        key = (original_title, original_start.isoformat(sep='T'), original_end.isoformat(sep='T'))
+        # Use the FULL title with the cancel prefix to match in Google
+        cancel_title = cancel_ev['titulo'].strip()
+        cancel_start = to_local(parse_datetime(cancel_ev['inicio'])).replace(tzinfo=None, microsecond=0)
+        cancel_end = to_local(parse_datetime(cancel_ev['fim'])).replace(tzinfo=None, microsecond=0)
+        key = (cancel_title, cancel_start.isoformat(sep='T'), cancel_end.isoformat(sep='T'))
         g_ev = google_dict.get(key)
         if g_ev:
             remover_evento_google_by_id(
