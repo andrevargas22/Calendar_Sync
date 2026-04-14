@@ -41,3 +41,4 @@ def mask_title(title: str) -> str:
 START_HOUR = 7    # Starting hour for period
 END_HOUR = 18     # Ending hour for period
 DAYS_RANGE = 11   # Number of days to sync
+LOOKBACK_DAYS = int(os.environ.get('LOOKBACK_DAYS', 30))  # Days to look back for stale canceled events
