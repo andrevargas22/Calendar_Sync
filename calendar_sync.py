@@ -53,6 +53,16 @@ def is_canceled_title(title):
     normalized_title = title.strip().lower()
     return any(normalized_title.startswith(prefix.lower()) for prefix in CANCEL_PREFIXES)
 
+def strip_cancel_prefix(title):
+    """Strip the cancel prefix from a title, returning the original event title."""
+    if not title:
+        return title
+    stripped = title.strip()
+    for prefix in CANCEL_PREFIXES:
+        if stripped.lower().startswith(prefix.lower()):
+            return stripped[len(prefix):].strip()
+    return stripped
+
 def main():
     logger.info("Calendar Sync Process Starting")
 
@@ -113,12 +123,17 @@ def main():
     # 4. Handle canceled events (no detailed timestamps in logs)
     logger.info("4. Handling canceled events from Teams (privacy masked)...")
     for cancel_ev in cancelado_events:
-        # Use the FULL title with the cancel prefix to match in Google
         cancel_title = cancel_ev['titulo'].strip()
         cancel_start = to_local(parse_datetime(cancel_ev['inicio'])).replace(tzinfo=None, microsecond=0)
         cancel_end = to_local(parse_datetime(cancel_ev['fim'])).replace(tzinfo=None, microsecond=0)
-        key = (cancel_title, cancel_start.isoformat(sep='T'), cancel_end.isoformat(sep='T'))
-        g_ev = google_dict.get(key)
+        start_iso = cancel_start.isoformat(sep='T')
+        end_iso = cancel_end.isoformat(sep='T')
+
+        matched = False
+
+        # Try matching with the full canceled title (e.g. Google already has "Cancelado: X")
+        key_full = (cancel_title, start_iso, end_iso)
+        g_ev = google_dict.get(key_full)
         if g_ev:
             remover_evento_google_by_id(
                 svc,
@@ -128,8 +143,27 @@ def main():
                 g_ev['fim']
             )
             canceled_deleted_count += 1
-            google_dict.pop(key, None)  # prevent step 6 from trying to delete the same event
-        else:
+            google_dict.pop(key_full, None)
+            matched = True
+
+        # Also try matching with the cancel prefix stripped (original title in Google)
+        original_title = strip_cancel_prefix(cancel_title)
+        if original_title != cancel_title:
+            key_original = (original_title, start_iso, end_iso)
+            g_ev = google_dict.get(key_original)
+            if g_ev:
+                remover_evento_google_by_id(
+                    svc,
+                    g_ev.get('id', None),
+                    g_ev['titulo'],
+                    g_ev['inicio'],
+                    g_ev['fim']
+                )
+                canceled_deleted_count += 1
+                google_dict.pop(key_original, None)
+                matched = True
+
+        if not matched:
             missing_cancel_matches += 1
 
     if canceled_deleted_count:
@@ -191,10 +225,29 @@ def main():
     else:
         logger.info(f"Orphan events deleted: {deleted_count}")
 
+    # 7. Final cleanup: remove any events with canceled titles still remaining in Google
+    logger.info("7. Cleaning up remaining canceled events in Google Calendar...")
+    canceled_cleanup_count = 0
+    for key, g_ev in list(google_dict.items()):
+        if is_canceled_title(g_ev.get('titulo', '')):
+            remover_evento_google_by_id(
+                svc,
+                g_ev.get('id', None),
+                g_ev['titulo'],
+                g_ev['inicio'],
+                g_ev['fim']
+            )
+            canceled_cleanup_count += 1
+
+    if canceled_cleanup_count:
+        logger.info(f"Remaining canceled events cleaned up: {canceled_cleanup_count}")
+    else:
+        logger.info("No remaining canceled events to clean up.")
+
     # Final summary
     logger.info("Sync summary (privacy masked): "
                 f"created={created_count} deleted={deleted_count} canceled_removed={canceled_deleted_count} "
-                f"cancel_no_match={missing_cancel_matches}")
+                f"cleanup={canceled_cleanup_count} cancel_no_match={missing_cancel_matches}")
     logger.info("Calendar Sync Process Completed")
 
 if __name__ == '__main__':

@@ -27,11 +27,9 @@ def get_calendar_service():
         Exception: If authentication fails
     """
     try:
-        if not GOOGLE_SERVICE_ACCOUNT_KEY:
-            raise ValueError("GOOGLE_SERVICE_ACCOUNT_KEY environment variable is not set")
-        
- 
         logger.info("Initializing Google Calendar API service...")
+        if not GOOGLE_SERVICE_ACCOUNT_KEY:
+            raise ValueError("GOOGLE_SERVICE_ACCOUNT_KEY is not set")
         credentials_info = json.loads(GOOGLE_SERVICE_ACCOUNT_KEY)
         required_keys = {"type", "project_id", "private_key", "client_email"}
         missing = [k for k in required_keys if k not in credentials_info or not credentials_info.get(k)]
