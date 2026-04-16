@@ -120,20 +120,33 @@ def main():
     canceled_deleted_count = 0
     missing_cancel_matches = 0
 
+    # Count canceled-titled events already in Google for diagnostics
+    google_canceled_count = sum(1 for g in google_events if is_canceled_title(g.get('titulo', '')))
+    logger.info(f"Teams: {len(cancelado_events)} canceled, {len(teams_dict)} active. "
+                f"Google: {len(google_dict)} total, {google_canceled_count} with canceled titles.")
+
     # 4. Handle canceled events (no detailed timestamps in logs)
     logger.info("4. Handling canceled events from Teams (privacy masked)...")
     for cancel_ev in cancelado_events:
         cancel_title = cancel_ev['titulo'].strip()
+        original_title = strip_cancel_prefix(cancel_title)
         cancel_start = to_local(parse_datetime(cancel_ev['inicio'])).replace(tzinfo=None, microsecond=0)
         cancel_end = to_local(parse_datetime(cancel_ev['fim'])).replace(tzinfo=None, microsecond=0)
         start_iso = cancel_start.isoformat(sep='T')
         end_iso = cancel_end.isoformat(sep='T')
 
-        matched = False
+        # Remove the original event from teams_dict so it won't be
+        # re-created in step 5 and will be caught as orphan in step 6
+        if original_title != cancel_title:
+            key_in_teams = (original_title, start_iso, end_iso)
+            if key_in_teams in teams_dict:
+                teams_dict.pop(key_in_teams)
+                logger.debug("Removed original event from teams_dict for canceled occurrence")
 
-        # Try matching with the full canceled title (e.g. Google already has "Cancelado: X")
-        key_full = (cancel_title, start_iso, end_iso)
-        g_ev = google_dict.get(key_full)
+        # Look up by the original (prefix-stripped) title — this is how
+        # it was stored in Google before the event was canceled in Teams
+        key = (original_title, start_iso, end_iso)
+        g_ev = google_dict.get(key)
         if g_ev:
             remover_evento_google_by_id(
                 svc,
@@ -143,27 +156,9 @@ def main():
                 g_ev['fim']
             )
             canceled_deleted_count += 1
-            google_dict.pop(key_full, None)
-            matched = True
-
-        # Also try matching with the cancel prefix stripped (original title in Google)
-        original_title = strip_cancel_prefix(cancel_title)
-        if original_title != cancel_title:
-            key_original = (original_title, start_iso, end_iso)
-            g_ev = google_dict.get(key_original)
-            if g_ev:
-                remover_evento_google_by_id(
-                    svc,
-                    g_ev.get('id', None),
-                    g_ev['titulo'],
-                    g_ev['inicio'],
-                    g_ev['fim']
-                )
-                canceled_deleted_count += 1
-                google_dict.pop(key_original, None)
-                matched = True
-
-        if not matched:
+            google_dict.pop(key, None)
+        else:
+            logger.debug(f"No Google match for canceled event: date={cancel_start.date()} start={start_iso}")
             missing_cancel_matches += 1
 
     if canceled_deleted_count:
