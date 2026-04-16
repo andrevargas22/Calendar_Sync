@@ -4,6 +4,17 @@ Configuration for the calendar sync application.
 
 import os
 import hashlib
+from pathlib import Path
+
+# Load .env file if present (local development)
+_env_path = Path(__file__).resolve().parent.parent / '.env'
+if _env_path.is_file():
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith('#') and '=' in _line:
+                _key, _, _val = _line.partition('=')
+                os.environ.setdefault(_key.strip(), _val.strip())
 
 def _get_bool(env_name: str, default: bool = False) -> bool:
 	val = os.environ.get(env_name)
@@ -23,7 +34,7 @@ CANCEL_PREFIX = os.environ.get('CANCEL_PREFIX', 'Cancelado:')
 CANCEL_PREFIXES = tuple(
 	p.strip() for p in os.environ.get(
 		'CANCEL_PREFIXES',
-		f"{CANCEL_PREFIX},Canceled event:,Cancelled event:,Canceled:,Cancelled:"
+		f"{CANCEL_PREFIX},Cancelado:,Canceled event:,Cancelled event:,Canceled:,Cancelled:"
 	).split(',') if p.strip()
 )
 LOG_MASK_TITLES = _get_bool('LOG_MASK_TITLES', True)
